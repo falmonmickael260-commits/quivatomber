@@ -348,10 +348,13 @@ function Countdown3() {
 /* ---------------- INTRO ---------------- */
 function Intro({ state }: { state: any }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 gap-10">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 gap-8">
+      {/* générique : le logo entre d'abord, les candidats ensuite */}
+      <Logo size="md" />
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
+        transition={{ delay: 0.6 }}
         className="font-display text-xl text-steel uppercase tracking-widest"
       >
         Que le jeu commence
@@ -576,7 +579,7 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
         {/* Desktop/tablette : le vrai plateau 3D — candidats en pied derrière
             leurs bornes, plateau sombre, projecteur sur celui qui répond.
             Si WebGL manque, on retombe sur le plateau CSS, même composition. */}
-        <div className="hidden md:block" style={{ height: "clamp(340px, 58vh, 700px)" }}>
+        <div className="hidden md:block" style={{ height: "clamp(320px, 52vh, 640px)" }}>
           {webgl ? (
             <WebGLGuard
               fallback={<Plateau className="h-full" players={roster} activeId={state.currentTurnPlayerId} />}
@@ -646,7 +649,7 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
       </div>
 
       {/* ================= ZONE DE JEU ================= */}
-      <div className="relative z-20 flex-1 px-3 md:px-6 pb-8 -mt-4 md:-mt-10">
+      <div className="relative z-20 flex-1 px-3 md:px-6 pb-8 -mt-6 md:-mt-24">
         <div className="mx-auto w-full max-w-[1500px] flex gap-4 xl:gap-6 items-start justify-center">
           {/* chaîne — rail gauche sur grand écran */}
           <div className="hidden xl:block w-[112px] shrink-0 pt-4">

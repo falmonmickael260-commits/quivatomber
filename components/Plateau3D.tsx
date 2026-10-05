@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { MeshReflectorMaterial, Text, RoundedBox } from "@react-three/drei";
+import { MeshReflectorMaterial, Text, RoundedBox, useTexture } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { Character3D, type CharacterMood } from "@/components/stage/Character3D";
@@ -223,7 +223,7 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
 
     if (spot.current) {
       spot.current.position.copy(head.current);
-      spot.current.intensity += ((target ? 1900 : 0) - spot.current.intensity) * k;
+      spot.current.intensity += ((target ? 2600 : 0) - spot.current.intensity) * k;
     }
     aim.current.position.copy(current.current);
     aim.current.updateMatrixWorld();
@@ -325,7 +325,7 @@ function CameraRig({
       look.current.set(fx * 0.95, 1.5, fz + 0.4);
     } else {
       want.current.set(0, 2.5 + total * 0.03, 9.2 + Math.max(0, total - 4) * 0.78);
-      look.current.set(0, 1.78, 1.2);
+      look.current.set(0, 2.05, 1.2);
     }
 
     // premier rendu : on se place directement, sans glissement
@@ -336,6 +336,46 @@ function CameraRig({
   });
 
   return null;
+}
+
+/* ─── enseigne ──────────────────────────────────────────────────────── */
+
+/**
+ * Le logo du jeu, en grand sur le mur de fond. C'est une image à fond
+ * transparent posée sur un caisson sombre : elle reste nette (1200 px de
+ * large pour ~9 unités à l'écran) et le caisson lui donne l'épaisseur d'un
+ * vrai décor de plateau. `toneMapped={false}` pour que les ors ne soient
+ * pas écrasés par l'exposition de la scène, volontairement très sombre.
+ */
+function StageSign() {
+  const tex = useTexture("/logo-qvt.png");
+  useEffect(() => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+  }, [tex]);
+
+  const WALL_R = 21;
+  const z = 3 - WALL_R + 0.7;
+
+  return (
+    <group position={[0, 2.9, z]}>
+      {/* caisson */}
+      <mesh position={[0, 0, -0.12]}>
+        <planeGeometry args={[7.3, 3.6]} />
+        <meshStandardMaterial color="#05070e" roughness={0.45} metalness={0.3} />
+      </mesh>
+      {/* halo rétroéclairé */}
+      <mesh position={[0, 0, -0.08]}>
+        <planeGeometry args={[8.3, 4.4]} />
+        <meshBasicMaterial color={GOLD} toneMapped={false} transparent opacity={0.07} />
+      </mesh>
+      {/* le logo */}
+      <mesh>
+        <planeGeometry args={[6.6, 4.4]} />
+        <meshBasicMaterial map={tex} transparent toneMapped={false} depthWrite={false} />
+      </mesh>
+    </group>
+  );
 }
 
 /* ─── décor ─────────────────────────────────────────────────────────── */
@@ -378,23 +418,9 @@ function StudioSet() {
         );
       })}
 
-      {/* enseigne du plateau, rétroéclairée */}
-      <group position={[0, 7.3, 3 - WALL_R + 0.7]}>
-        <mesh>
-          <planeGeometry args={[9.8, 3.7]} />
-          <meshStandardMaterial color="#05070e" roughness={0.4} metalness={0.3} />
-        </mesh>
-        <mesh position={[0, 0, -0.02]}>
-          <planeGeometry args={[10.5, 4.4]} />
-          <meshBasicMaterial color={RED} toneMapped={false} transparent opacity={0.1} />
-        </mesh>
-        <Text position={[0, 0.74, 0.03]} fontSize={1.16} color="#f4f1ea" anchorX="center" anchorY="middle" letterSpacing={0.04}>
-          QUI VA
-        </Text>
-        <Text position={[0, -0.78, 0.03]} fontSize={1.4} color={RED} anchorX="center" anchorY="middle" letterSpacing={0.03}>
-          TOMBER ?
-        </Text>
-      </group>
+      {/* enseigne du plateau : le logo du jeu, monté sur un caisson
+          rétroéclairé contre le mur de fond */}
+      <StageSign />
 
       {/* rampe de projecteurs éteints au plafond : on sent le gril technique */}
       {[-8.4, -5, -1.7, 1.7, 5, 8.4].map((x) => (
@@ -460,18 +486,17 @@ function Scene({
       <color attach="background" args={["#03040a"]} />
       <fog attach="fog" args={["#03040a", 20, 50]} />
 
-      {/* Éclairage d'ensemble très faible : le plateau doit être sombre.
-          Juste de quoi deviner les candidats qui ne jouent pas. */}
-      <ambientLight intensity={0.44} color="#7e92c6" />
-      <hemisphereLight args={["#32405f", "#020306", 0.6]} />
-      {/* nappe frontale très douce : évite que les visages non éclairés
-          tombent dans le noir absolu */}
-      <directionalLight position={[0, 6.5, 13]} intensity={0.34} color="#9fb2d8" />
-      {/* deux touches de contre-jour fixes, pour détacher les silhouettes */}
-      <pointLight position={[-15, 7, -3]} intensity={70} distance={40} decay={2} color={RED} />
-      <pointLight position={[15, 7, -3]} intensity={46} distance={40} decay={2} color="#4b6ea8" />
+      {/* Il n'y a qu'une vraie source sur ce plateau : le projecteur du
+          candidat qui répond. Le reste n'est là que pour que le décor ne
+          soit pas un rectangle noir et que les silhouettes des autres
+          candidats se devinent — pas pour éclairer leur visage. */}
+      <ambientLight intensity={0.07} color="#6d80b4" />
+      <hemisphereLight args={["#1b2338", "#010204", 0.13]} />
+      {/* contre-jours fixes, placés derrière l'arc : ils détourent les
+          candidats au lieu de les éclairer de face */}
+      <pointLight position={[-15, 7, -5]} intensity={40} distance={40} decay={2} color={RED} />
+      <pointLight position={[15, 7, -5]} intensity={26} distance={40} decay={2} color="#4b6ea8" />
 
-      <CameraRig total={total} compact={compact} focus={target} />
       <StudioSet />
       <MovingSpot target={target} />
 
