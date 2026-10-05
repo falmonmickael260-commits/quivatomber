@@ -24,6 +24,7 @@ app.prepare().then(() => {
         const { room, hostId, hostToken } = engine.createRoom(name, settings);
         currentRoomCode = room.code;
         currentPlayerId = hostId;
+        engine.attachSocket(room, hostId, socket.id);
         socket.join(`player:${hostId}`);
         socket.join(`room:${room.code}`);
         cb?.({ ok: true, code: room.code, playerId: hostId, token: hostToken });
@@ -38,6 +39,7 @@ app.prepare().then(() => {
       if (result.error) return cb?.({ ok: false, error: result.error });
       currentRoomCode = result.room.code;
       currentPlayerId = result.player.id;
+      engine.attachSocket(result.room, result.player.id, socket.id);
       socket.join(`player:${result.player.id}`);
       socket.join(`room:${result.room.code}`);
       cb?.({ ok: true, code: result.room.code, playerId: result.player.id, token: result.token });
@@ -53,6 +55,7 @@ app.prepare().then(() => {
       if (result.error) return cb?.({ ok: false, error: result.error });
       currentRoomCode = result.room.code;
       currentPlayerId = playerId;
+      engine.attachSocket(result.room, playerId, socket.id);
       socket.join(`player:${playerId}`);
       socket.join(`room:${result.room.code}`);
       cb?.({ ok: true });
@@ -96,7 +99,9 @@ app.prepare().then(() => {
     socket.on("disconnect", () => {
       const room = engine.findRoom(currentRoomCode);
       if (room && currentPlayerId) {
-        engine.markDisconnected(room, currentPlayerId, io);
+        // on passe l'id du socket : si le joueur est déjà revenu par un
+        // autre socket, cette déconnexion-ci ne le concerne plus
+        engine.markDisconnected(room, currentPlayerId, io, socket.id);
       }
     });
   });

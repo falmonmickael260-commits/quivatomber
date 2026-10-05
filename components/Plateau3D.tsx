@@ -223,7 +223,7 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
 
     if (spot.current) {
       spot.current.position.copy(head.current);
-      spot.current.intensity += ((target ? 2600 : 0) - spot.current.intensity) * k;
+      spot.current.intensity += ((target ? 1150 : 0) - spot.current.intensity) * k;
     }
     aim.current.position.copy(current.current);
     aim.current.updateMatrixWorld();
@@ -238,12 +238,12 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
       cone.current.scale.set(2.2, len, 2.2);
       cone.current.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir.clone().normalize());
       const m = cone.current.material as THREE.MeshBasicMaterial;
-      m.opacity += ((target ? 0.075 : 0) - m.opacity) * k;
+      m.opacity += ((target ? 0.035 : 0) - m.opacity) * k;
     }
     if (pool.current) {
       pool.current.position.set(current.current.x, 0.02, current.current.z);
       const m = pool.current.material as THREE.MeshBasicMaterial;
-      m.opacity += ((target ? 0.3 : 0) - m.opacity) * k;
+      m.opacity += ((target ? 0.13 : 0) - m.opacity) * k;
     }
   });
 
@@ -253,12 +253,12 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
       <spotLight
         ref={spot}
         target={aim.current}
-        angle={0.27}
-        penumbra={0.75}
+        angle={0.3}
+        penumbra={0.9}
         distance={32}
         decay={1.5}
         intensity={0}
-        color="#fff3e2"
+        color="#ffeedd"
         castShadow
         shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.0012}
@@ -266,7 +266,7 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
       {/* faisceau visible */}
       <mesh ref={cone} geometry={coneGeo} renderOrder={2}>
         <meshBasicMaterial
-          color="#dce7ff"
+          color="#c8d6f0"
           transparent
           opacity={0}
           depthWrite={false}
@@ -278,7 +278,7 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
       {/* flaque de lumière au sol */}
       <mesh ref={pool} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
         <circleGeometry args={[2.2, 40]} />
-        <meshBasicMaterial color="#ffe9cd" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+        <meshBasicMaterial color="#ffdcb4" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </mesh>
     </>
   );
@@ -537,7 +537,13 @@ export function Plateau3D({
         dpr={compact ? [1, 1.4] : [1, 1.75]}
         shadows={!compact}
         camera={{ position: [0, 2.7, 12.3], fov: compact ? 40 : 36 }}
+        // Exposition volontairement basse : sous un projecteur unique et
+        // puissant, les tenues claires des modèles partaient au blanc pur.
         gl={{ antialias: true, powerPreference: "high-performance" }}
+        onCreated={({ gl }) => {
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 0.78;
+        }}
       >
         <Suspense fallback={null}>
           <Scene players={players} activeId={activeId} mood={mood} compact={compact} />
