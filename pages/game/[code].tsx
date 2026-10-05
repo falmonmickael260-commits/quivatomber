@@ -637,8 +637,13 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
           </HudPanel>
         </div>
 
-        {/* --- HUD : manche / joueurs restants --- */}
-        <div className="absolute bottom-2 left-3 md:left-5 z-20 hidden sm:flex gap-2">
+        {/* --- HUD : manche / joueurs restants, sous la cagnotte ---
+            (le bas gauche du plateau est occupé par l'échelle de chaîne) */}
+        <div
+          className={`absolute left-2 md:left-5 z-20 hidden sm:flex gap-2 ${
+            state.isSpectator ? "top-[86px] md:top-[112px]" : "top-[70px] md:top-[100px]"
+          }`}
+        >
           <HudPanel label="Manche">
             <p className="font-display text-base md:text-xl text-white leading-none">{state.roundNumber}</p>
           </HudPanel>
@@ -652,12 +657,12 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
       <div className="relative z-20 flex-1 px-3 md:px-6 pb-8 -mt-6 md:-mt-24">
         <div className="mx-auto w-full max-w-[1500px] flex gap-4 xl:gap-6 items-start justify-center">
           {/* chaîne — rail gauche sur grand écran */}
-          <div className="hidden xl:block w-[112px] shrink-0 pt-4">
+          <div className="hidden xl:block w-[128px] shrink-0 pt-2">
             <ChainLadder steps={state.chainSteps} level={state.chainLevel} />
           </div>
 
           {/* colonne centrale */}
-          <div className="flex-1 min-w-0 max-w-[820px] flex flex-col gap-3 md:gap-4">
+          <div className="flex-1 min-w-0 max-w-[920px] flex flex-col gap-3 md:gap-4">
             {/* bandeau du candidat en lumière */}
             {currentTurnPlayer && (
               <motion.div
@@ -699,33 +704,35 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
                   transition={{ duration: 0.3 }}
                   className="flex flex-col gap-3"
                 >
-                  {/* carte question */}
+                  {/* carte question — catégorie et question centrées, le
+                      compteur en coin pour ne pas décentrer le texte */}
                   <div
-                    className="relative rounded-2xl px-4 py-4 md:px-7 md:py-5 backdrop-blur-md"
+                    className="relative rounded-3xl px-5 py-5 md:px-10 md:py-7 backdrop-blur-md text-center"
                     style={{
-                      background: "linear-gradient(180deg, rgba(16,21,34,0.9), rgba(5,7,13,0.92))",
-                      border: "1px solid rgba(160,180,225,0.17)",
-                      boxShadow: "0 18px 50px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.07)",
+                      background: "linear-gradient(180deg, rgba(18,24,40,0.94), rgba(6,9,16,0.95))",
+                      border: "1px solid rgba(160,180,225,0.2)",
+                      boxShadow: "0 22px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.08)",
                     }}
                   >
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-blood font-bold mb-1.5">
-                          {state.question.category}
-                        </p>
-                        <h2 className="font-display text-xl md:text-3xl text-white leading-snug">
-                          {state.question.question}
-                        </h2>
+                    <p className="text-[11px] md:text-sm uppercase tracking-[0.28em] text-blood font-bold mb-2.5">
+                      {state.question.category}
+                    </p>
+                    <h2 className="font-display text-2xl md:text-[2.6rem] text-white leading-tight px-2 md:pl-24 md:pr-24">
+                      {state.question.question}
+                    </h2>
+                    {!revealing && (
+                      <div className="absolute top-1/2 -translate-y-1/2 right-3 md:right-6">
+                        <CountdownRing seconds={secs} total={questionTotal} />
                       </div>
-                      {!revealing && <CountdownRing seconds={secs} total={questionTotal} />}
-                    </div>
+                    )}
                   </div>
 
                   {/* réponses */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 md:gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                     {state.question.choices.map((c: string, idx: number) => {
                       const tone = answerTone(idx);
                       const clickable = isMyTurn && !answered && !revealing;
+                      const hot = tone === "wrong" || tone === "picked";
                       return (
                         <button
                           key={idx}
@@ -734,62 +741,49 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
                             setPicked(idx);
                             socket.emit("submit_answer", { choiceIndex: idx });
                           }}
-                          className={`group flex items-center gap-3 rounded-2xl px-3 py-3 md:px-4 md:py-3.5 text-left transition-all duration-200 ${
-                            clickable ? "active:scale-[0.985]" : "cursor-default"
+                          className={`group flex items-center gap-4 rounded-2xl px-4 py-4 md:px-6 md:py-5 text-left transition-all duration-200 ${
+                            clickable ? "active:scale-[0.985] hover:brightness-125" : "cursor-default"
                           }`}
                           style={{
-                            minHeight: 58,
+                            minHeight: 74,
                             background:
                               tone === "correct"
-                                ? "linear-gradient(180deg, rgba(22,101,52,0.5), rgba(5,30,16,0.75))"
-                                : tone === "wrong"
-                                ? "linear-gradient(180deg, rgba(120,12,30,0.5), rgba(30,4,10,0.75))"
-                                : tone === "picked"
-                                ? "linear-gradient(180deg, rgba(120,12,30,0.4), rgba(20,6,12,0.8))"
-                                : "linear-gradient(180deg, rgba(16,21,34,0.85), rgba(5,7,13,0.9))",
-                            border: `1.5px solid ${
+                                ? "linear-gradient(180deg, rgba(22,101,52,0.5), rgba(5,30,16,0.78))"
+                                : hot
+                                ? "linear-gradient(180deg, rgba(130,14,33,0.5), rgba(28,5,11,0.82))"
+                                : "linear-gradient(180deg, rgba(19,25,42,0.92), rgba(7,10,18,0.94))",
+                            border: `2px solid ${
                               tone === "correct"
-                                ? "rgba(74,222,128,0.85)"
-                                : tone === "wrong" || tone === "picked"
-                                ? "rgba(255,61,88,0.85)"
-                                : "rgba(160,180,225,0.16)"
+                                ? "rgba(74,222,128,0.9)"
+                                : hot
+                                ? "rgba(255,61,88,0.95)"
+                                : "rgba(160,180,225,0.18)"
                             }`,
                             boxShadow:
                               tone === "correct"
-                                ? "0 0 26px rgba(34,197,94,0.35)"
-                                : tone === "wrong" || tone === "picked"
-                                ? "0 0 26px rgba(227,18,47,0.4)"
-                                : "inset 0 1px 0 rgba(255,255,255,0.05)",
-                            opacity: tone === "muted" ? 0.45 : 1,
+                                ? "0 0 30px rgba(34,197,94,0.4)"
+                                : hot
+                                ? "0 0 30px rgba(227,18,47,0.5)"
+                                : "inset 0 1px 0 rgba(255,255,255,0.06)",
+                            opacity: tone === "muted" ? 0.4 : 1,
                           }}
                         >
                           <span
-                            className="shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center font-display text-base"
+                            className="shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center font-display text-lg md:text-xl"
                             style={{
-                              border: `1.5px solid ${
+                              border: `2px solid ${
                                 tone === "correct"
-                                  ? "rgba(74,222,128,0.9)"
-                                  : tone === "wrong" || tone === "picked"
-                                  ? "rgba(255,61,88,0.9)"
-                                  : "rgba(180,198,240,0.35)"
+                                  ? "rgba(74,222,128,0.95)"
+                                  : hot
+                                  ? "rgba(255,61,88,0.95)"
+                                  : "rgba(180,198,240,0.4)"
                               }`,
-                              color:
-                                tone === "correct"
-                                  ? "#86efac"
-                                  : tone === "wrong" || tone === "picked"
-                                  ? "#ff8095"
-                                  : "#dbe3f5",
+                              color: tone === "correct" ? "#86efac" : hot ? "#ff8095" : "#dbe3f5",
                             }}
                           >
                             {"ABCD"[idx]}
                           </span>
-                          <span
-                            className={`text-sm md:text-base font-medium leading-snug ${
-                              clickable ? "text-white group-hover:text-white" : "text-white/85"
-                            }`}
-                          >
-                            {c}
-                          </span>
+                          <span className="text-base md:text-lg font-medium leading-snug text-white">{c}</span>
                         </button>
                       );
                     })}
@@ -815,11 +809,11 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
                       <BigButton
                         onClick={() => socket.emit("choose_bank")}
                         disabled={state.chain <= 0}
-                        className="w-full sm:w-auto sm:min-w-[320px] !py-3.5"
+                        className="w-full sm:w-[460px] !py-4 !text-2xl"
                       >
                         <span className="flex flex-col items-center leading-tight">
-                          <span>💰 BANQUER</span>
-                          <span className="text-sm font-body font-semibold opacity-90">
+                          <span className="tracking-[0.12em]">💰 BANQUER</span>
+                          <span className="text-base font-body font-semibold opacity-90 tracking-normal">
                             {formatEuro(state.chain)}
                           </span>
                         </span>
@@ -879,29 +873,37 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
           </div>
 
           {/* gains — rail droit sur grand écran */}
-          <div className="hidden xl:block w-[150px] shrink-0 pt-4">
+          <div className="hidden xl:block w-[182px] shrink-0 pt-20">
             {me && (
-              <HudPanel label="Vos gains">
+              <div
+                className="rounded-2xl px-4 py-3.5 backdrop-blur-md text-center"
+                style={{
+                  background: "linear-gradient(180deg, rgba(18,24,40,0.9), rgba(6,9,16,0.93))",
+                  border: "1px solid rgba(160,180,225,0.18)",
+                  boxShadow: "0 14px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.07)",
+                }}
+              >
+                <p className="text-[10px] uppercase tracking-[0.2em] text-steel font-semibold">Vos gains</p>
                 <AnimatedAmount
                   value={me.banked}
-                  className="font-display text-2xl text-white leading-none tabular-nums"
+                  className="font-display text-3xl text-white leading-none tabular-nums block mt-1"
                 />
-                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-white/10">
-                  <span className="flex items-center gap-1 text-green-400 text-xs font-bold">
-                    <span className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center text-[9px]">
+                <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-white/10">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-green-500/25 text-green-400 flex items-center justify-center text-[11px] font-bold">
                       ✓
                     </span>
-                    {me.correctCount}
+                    <span className="font-display text-lg text-white leading-none">{me.correctCount}</span>
                   </span>
-                  <span className="flex items-center gap-1 text-blood text-xs font-bold">
-                    <span className="w-4 h-4 rounded-full bg-blood/20 flex items-center justify-center text-[9px]">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-blood/25 text-blood flex items-center justify-center text-[11px] font-bold">
                       ✕
                     </span>
-                    {me.wrongCount}
+                    <span className="font-display text-lg text-white leading-none">{me.wrongCount}</span>
                   </span>
                 </div>
-                <p className="text-[8px] uppercase tracking-widest text-steel mt-1.5">Bonnes · Mauvaises</p>
-              </HudPanel>
+                <p className="text-[9px] uppercase tracking-[0.14em] text-steel mt-1.5">Bonnes · Mauvaises</p>
+              </div>
             )}
           </div>
         </div>
