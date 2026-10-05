@@ -18,6 +18,9 @@ Ouvrez `http://localhost:3000`. Pour tester en multijoueur local, ouvrez plusieu
 - **`server.js`** — serveur HTTP custom (Next.js + Socket.io) : point d'entrée unique.
 - **`lib/gameEngine.js`** — moteur de jeu **autoritatif côté serveur** : toute la logique (chaîne, banque, votes, élimination, départage d'égalité, finale) y vit. Le client n'affiche que ce que le serveur lui envoie ; les bonnes réponses ne sont jamais transmises avant résolution (anti-triche).
 - **`lib/questions.js`** — banque de questions (11 catégories, 3 niveaux de difficulté).
+- **`components/Plateau3D.tsx`** — le plateau : décor de studio, bornes, et le projecteur qui suit le candidat actif. Tout est construit à partir de primitives Three.js (aucun modèle ni texture à charger).
+- **`components/stage/Character3D.tsx`** — candidats en pied, assemblés en capsules et sphères ; leur apparence (peau, coiffure, tenue, carrure) est dérivée de l'`avatarSeed` que le serveur attribue, donc stable d'une manche à l'autre et après reconnexion.
+- **`components/Plateau.tsx`** — même plateau en CSS/SVG, utilisé en repli quand WebGL est indisponible.
 - **`lib/session.ts`** — persistance de session joueur (code / id / token) en `localStorage`, utilisée pour la reconnexion automatique après rafraîchissement ou coupure réseau.
 - **`pages/`** — Accueil, Créer, Rejoindre, Règles, et `game/[code].tsx` qui pilote l'intégralité de la partie (un composant par phase : lobby, intro, manche, résumé, vote, révélation, départage, élimination, transition, finale, victoire).
 - **`hooks/useSound.tsx`** — sound design généré en direct via `AudioContext` (oscillateurs + bruit blanc), avec bouton muet.
@@ -37,9 +40,10 @@ Toutes les transitions, délais, tirage des questions, calcul des votes et du d�
 
 - 4 à 8 joueurs, bouton de lancement verrouillé tant que < 4 joueurs ou que tous ne sont pas prêts.
 - Lobby avec arrivée animée des joueurs, code de partie, copier/partager.
+- Plateau de télévision : chaque candidat a sa borne numérotée (le numéro est attribué à l'arrivée et ne change plus de la partie), se tient debout derrière, et un projecteur unique se déplace d'une borne à l'autre au changement de tour. Le reste du plateau reste dans l'ombre : les autres candidats restent visibles, simplement peu éclairés.
 - Introduction cinématique avec présentation des joueurs.
 - Chaîne de gains (100€ → 10 000€), banque, chaîne brisée, feedback bonne/mauvaise réponse.
-- Chronomètre de manche + compte à rebours par question (10s), avec tension croissante.
+- Chronomètre de manche + compte à rebours par question (**15 s**), avec montée de tension sur le compteur seul (le plateau, lui, ne clignote pas).
 - Récapitulatif de manche (cagnotte, total banqué, stats).
 - Vote secret (impossible de voter pour soi, résultats cachés jusqu'à la révélation).
 - Révélation progressive des votes, élimination spectaculaire, **départage d'égalité côté serveur** (argent rapporté → bonnes réponses → rapidité).
@@ -49,6 +53,25 @@ Toutes les transitions, délais, tirage des questions, calcul des votes et du d�
 - Sound design complet, bouton muet.
 - Mobile-first, responsive desktop.
 
+## Rendu du plateau
+
+Le plateau est rendu en WebGL (Three.js / React Three Fiber), chargé à la
+demande : il n'arrive qu'au début d'une manche, donc l'accueil, le lobby et
+les écrans de vote s'affichent sans l'attendre.
+
+Deux points à ne pas défaire :
+
+- **Une seule copie de Three.js.** `stats-gl`, tiré par `@react-three/drei`,
+  embarque sa propre version de three. Deux copies dans le bundle cassent
+  tous les `instanceof` de three : le rendu s'initialise normalement puis ne
+  dessine rien, sans la moindre erreur en console. `next.config.js` force
+  donc la résolution de `three` vers une copie unique.
+- **La version de three doit rester compatible avec `@react-three/fiber` 8**
+  (qui impose React 18). C'est pourquoi three est épinglé en 0.168.
+
+Sans WebGL (ou si le contexte est perdu), `components/Plateau.tsx` prend le
+relais : même composition, en CSS/SVG.
+
 ## Limites connues / pistes pour la suite
 
 - **Persistance** : les parties vivent en mémoire (process Node). Un redémarrage serveur efface les parties en cours. Prochaine étape naturelle : brancher Postgres/Supabase (parties, joueurs, manches, votes) comme prévu dans l'architecture cible — le code est déjà isolé dans `lib/gameEngine.js` pour faciliter ce branchement.
@@ -56,6 +79,7 @@ Toutes les transitions, délais, tirage des questions, calcul des votes et du d�
 - **Comptes / classement / historique** : non implémentés (le jeu fonctionne par pseudo, sans compte), mais l'architecture (ids de joueurs, stats par manche) est prête pour les brancher plus tard.
 - **Audit de sécurité des dépendances** : `next@14.2.35` reste ciblé par des advisories npm très larges concernant des fonctionnalités non utilisées ici (Server Actions, `next/image`, middleware, App Router) — ce projet utilise uniquement le Pages Router avec un serveur custom minimal. À réévaluer avant une mise en production réelle (migration vers Next 15/16 recommandée à terme).
 - Banque de questions volontairement limitée pour la démo (~65 questions) ; à étoffer pour éviter les répétitions sur de longues parties.
+- **Expressions des candidats** : les personnages ont quatre attitudes (attente, réflexion, bonne/mauvaise réponse). De quoi lire la scène, pas une vraie animation faciale.
 
 ## Tests effectués
 

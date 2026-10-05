@@ -1,5 +1,17 @@
 # Licences des assets — QUI VA TOMBER ?
 
+## Candidats sur le plateau — aucun asset
+
+Les candidats visibles sur le plateau (`components/stage/Character3D.tsx`)
+sont **construits à l'exécution à partir de primitives Three.js** (capsules,
+sphères, cônes) : aucun modèle 3D, aucune texture, aucune image n'est
+téléchargée ni redistribuée. Leur apparence (teint, coiffure, tenue,
+carrure, accessoire) est tirée de façon déterministe de l'`avatarSeed`
+attribué par le serveur — voir `components/stage/characterPresets.ts`.
+
+Il n'y a donc rien à licencier pour ces personnages : les formes et les
+palettes sont écrites dans ce dépôt.
+
 ## Portraits de personnages
 
 **Source : pack "Universal Base Characters" de Quaternius, licence CC0
@@ -13,6 +25,10 @@ couvrant 10 silhouettes féminines et 11 masculines, tenues variées
 (aventurier, soldat, costume, sorcière, roi, combinaison spatiale,
 fermier, punk, plage, etc.) — assez de variété pour que chaque candidat
 d'une partie à 8 joueurs soit instantanément reconnaissable.
+
+Ces portraits ne sont plus utilisés sur le plateau de jeu (remplacé par les
+candidats 3D ci-dessus) mais restent employés pour le lobby, l'écran de
+présentation, le vote, et le plateau de repli sans WebGL.
 
 Fichiers : `public/characters/*.png` — intégrés dans
 [components/CharacterPortrait.tsx](components/CharacterPortrait.tsx), qui

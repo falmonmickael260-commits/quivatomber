@@ -2,9 +2,19 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Background } from "@/components/Background";
-import { StudioBackdrop } from "@/components/StudioBackdrop";
-import { Stage3D } from "@/components/Stage3D";
+import { Plateau, PlateauMobile, StudioSetBackdrop } from "@/components/Plateau";
+import dynamic from "next/dynamic";
 import { WebGLGuard, hasWebGL } from "@/components/WebGLGuard";
+
+/**
+ * Le plateau 3D embarque Three.js (~300 Ko). On ne le charge qu'au moment
+ * où une manche commence : l'accueil, le lobby et les écrans de vote
+ * s'affichent sans l'attendre. `ssr: false` car il n'y a pas de WebGL
+ * côté serveur.
+ */
+const Plateau3D = dynamic(() => import("@/components/Plateau3D").then((m) => m.Plateau3D), {
+  ssr: false,
+});
 import { MuteButton, BigButton, Panel } from "@/components/UI";
 import { CharacterPortrait } from "@/components/CharacterPortrait";
 import { AnimatedAmount, formatEuro } from "@/components/AnimatedAmount";
@@ -134,28 +144,15 @@ export default function GamePage() {
     );
   }
 
-  const activeRoster = state.players.filter((p: any) => !p.eliminated);
-  const stageActiveIndex = activeRoster.findIndex((p: any) => p.id === state.currentTurnPlayerId);
-
   return (
     <div className="relative min-h-screen overflow-hidden">
       <Background intensity={state.phase === "ELIMINATION" || state.phase === "REVEAL" ? 1.3 : 0.6} />
-      {(state.phase === "ROUND_PLAY" || state.phase === "FINALE") && (
-        <div className="hidden lg:block">
-          {hasWebGL() ? (
-            <WebGLGuard fallback={<StudioBackdrop />}>
-              <Stage3D activeIndex={stageActiveIndex} playerCount={Math.max(activeRoster.length, 1)} />
-            </WebGLGuard>
-          ) : (
-            <StudioBackdrop />
-          )}
-        </div>
-      )}
-      {["VOTE", "REVEAL", "TIEBREAK", "ELIMINATION", "ROUND_TRANSITION"].includes(state.phase) && (
-        <div className="hidden lg:block">
-          <StudioBackdrop />
-        </div>
-      )}
+      {/* La manche compose son propre plateau (bornes + projecteur) ; les
+          autres phases du jeu gardent le décor du studio en fond pour qu'on
+          ne quitte jamais visuellement le plateau. */}
+      {["VOTE", "REVEAL", "TIEBREAK", "ELIMINATION", "ROUND_TRANSITION", "FINALE_INTRO", "FINALE", "INTRO"].includes(
+        state.phase
+      ) && <StudioSetBackdrop />}
       <MuteButton />
       {state.isSpectator && state.phase !== "VICTORY" && <SpectatorBanner />}
       <AnimatePresence mode="wait">
@@ -379,250 +376,579 @@ function Intro({ state }: { state: any }) {
 }
 
 /* ---------------- ROUND PLAY ---------------- */
-function RoundPlay({ state, socket }: { state: any; socket: any }) {
-  const remaining = useCountdown(state.question ? state.questionDeadline : null);
-  const roundRemaining = useCountdown(state.roundEndsAt);
-  const { play } = useSound();
-  const secs = Math.ceil(remaining / 1000);
-  const lastTick = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (!state.question) return;
-    if (secs !== lastTick.current && secs <= 10 && secs > 0) {
-      lastTick.current = secs;
-      play(secs <= 3 ? "tick_urgent" : "tick");
-    }
-  }, [secs, state.question, play]);
-
-  const isMyTurn = state.isMyTurn && !state.isSpectator;
-  const answered = state.players.find((p: any) => p.id === state.viewerId)?.answeredCurrent;
-  const currentTurnPlayer = state.players.find((p: any) => p.id === state.currentTurnPlayerId);
-  const result = state.lastAnswerResult;
-
-  const roundMin = Math.floor(roundRemaining / 60000);
-  const roundSec = Math.floor((roundRemaining % 60000) / 1000);
-
-  // Desktop gets a real plateau: other candidates seated either side of the
-  // central screen. Mobile never sees this — it stays question-first, one
-  // column, nothing to scroll past to reach the answer buttons.
-  const others = state.players.filter((p: any) => !p.eliminated && p.id !== state.currentTurnPlayerId);
-  const leftRail = others.filter((_: any, i: number) => i % 2 === 0);
-  const rightRail = others.filter((_: any, i: number) => i % 2 === 1);
-
+/** Panneau du HUD : verre sombre, liseré discret, rouge pour l'info chaude. */
+function HudPanel({
+  label,
+  tone = "neutral",
+  className = "",
+  children,
+}: {
+  label: string;
+  tone?: "neutral" | "red";
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const red = tone === "red";
   return (
-    <div className="min-h-screen px-4 py-6 lg:px-8 lg:py-10 flex flex-col lg:grid lg:grid-cols-[180px_minmax(0,760px)_180px] lg:justify-center lg:gap-8">
-      {/* top bar */}
-      <div className="flex items-center justify-between text-xs md:text-sm text-steel uppercase tracking-widest lg:col-span-3 pr-14 sm:pr-0">
-        <span>Manche {state.roundNumber}</span>
-        <span className="font-display text-base">
-          Temps restant : <span className="text-white">{roundMin}:{String(roundSec).padStart(2, "0")}</span>
-        </span>
-        <span>{state.activeCount} joueurs en jeu</span>
-      </div>
-
-      {/* left pedestals — desktop plateau only */}
-      <div className="hidden lg:flex flex-col gap-3 pt-6">
-        {leftRail.map((p: any) => (
-          <PlayerPedestal key={p.id} player={p} />
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-6 w-full max-w-3xl mx-auto lg:max-w-none lg:mx-0 lg:bg-white/[0.015] lg:border lg:border-white/[0.07] lg:rounded-3xl lg:p-8">
-      {/* chain */}
-      <div className="flex flex-col items-center gap-2 py-4">
-        <span className="text-xs uppercase tracking-[0.3em] text-steel">Chaîne</span>
-        <motion.div
-          key={state.chain}
-          initial={{ scale: 0.7, opacity: 0.4 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 300, damping: 14 }}
-        >
-          <AnimatedAmount
-            value={state.chain}
-            className="font-display text-6xl md:text-7xl text-gold"
-          />
-        </motion.div>
-        <div className="flex gap-1">
-          {state.chainSteps.map((_: number, i: number) => (
-            <span
-              key={i}
-              className={`w-2.5 h-2.5 rounded-full ${i < state.chainLevel ? "bg-gold shadow-glowGold" : "bg-white/10"}`}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* current player spotlight */}
-      {!result && currentTurnPlayer && (
-        <motion.div
-          key={currentTurnPlayer.id}
-          initial={{ opacity: 0, scale: 0.9, y: -8 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 220, damping: 20 }}
-          className="relative flex justify-center"
-        >
-          {/* fixed overhead spotlight cone, grounds the active player on the
-              studio floor — static, not animated */}
-          <div
-            className="hidden lg:block absolute -top-16 left-1/2 -translate-x-1/2 w-72 h-40 pointer-events-none"
-            style={{
-              background: isMyTurn
-                ? "conic-gradient(from 180deg at 50% 0%, transparent 35%, rgba(227,18,47,0.16) 50%, transparent 65%)"
-                : "conic-gradient(from 180deg at 50% 0%, transparent 38%, rgba(255,255,255,0.06) 50%, transparent 62%)",
-            }}
-          />
-          <div
-            className={`relative flex items-center gap-4 px-6 py-3 rounded-2xl border backdrop-blur-xl ${
-              isMyTurn
-                ? "border-blood/60 bg-blood/10 shadow-glowRed"
-                : "border-white/10 bg-white/[0.03]"
-            }`}
-          >
-            <CharacterPortrait seed={currentTurnPlayer.avatarSeed} size={52} glow={isMyTurn} />
-            <div className="text-left">
-              <p className="text-[10px] uppercase tracking-widest text-steel">En jeu</p>
-              <p className="font-display text-xl uppercase text-white leading-tight">{currentTurnPlayer.name}</p>
-              <p className={`text-xs uppercase tracking-widest font-semibold ${isMyTurn ? "text-blood" : "text-steel"}`}>
-                {isMyTurn ? "À vous de jouer" : "Joue en ce moment"}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* question card */}
-      <AnimatePresence mode="wait">
-        {result ? (
-          <ResultBanner key="result" result={result} players={state.players} />
-        ) : state.question ? (
-          <motion.div
-            key={state.question.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-          >
-            <Panel className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[10px] uppercase tracking-widest text-gold bg-gold/10 px-2 py-1 rounded">
-                  {state.question.category}
-                </span>
-                <CountdownRing seconds={secs} total={10} />
-              </div>
-              <h2 className="font-display text-2xl md:text-3xl text-white text-center mb-6 leading-tight">
-                {state.question.question}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {state.question.choices.map((c: string, idx: number) => (
-                  <button
-                    key={idx}
-                    disabled={!isMyTurn || answered}
-                    onClick={() => socket.emit("submit_answer", { choiceIndex: idx })}
-                    className={`p-4 rounded-xl border text-left transition font-medium ${
-                      isMyTurn && !answered
-                        ? "border-white/15 bg-white/5 hover:border-blood hover:bg-blood/10 active:scale-[0.98]"
-                        : "border-white/10 bg-white/[0.02] text-steel"
-                    }`}
-                  >
-                    <span className="text-blood font-display mr-2">{"ABCD"[idx]}</span>
-                    {c}
-                  </button>
-                ))}
-              </div>
-
-              {isMyTurn && !answered && (
-                <div className="mt-6 flex justify-center">
-                  <BigButton
-                    variant="gold"
-                    disabled={state.chain <= 0}
-                    onClick={() => socket.emit("choose_bank")}
-                    className="w-full sm:w-auto"
-                  >
-                    💰 BANQUER <AnimatedAmount value={state.chain} />
-                  </BigButton>
-                </div>
-              )}
-              {!isMyTurn && !state.isSpectator && (
-                <p className="text-center text-steel text-xs mt-4 uppercase tracking-widest">
-                  Patientez, ce n'est pas votre tour
-                </p>
-              )}
-            </Panel>
-          </motion.div>
-        ) : state.lastBankEvent ? (
-          <BankBanner key="bank" event={state.lastBankEvent} players={state.players} />
-        ) : null}
-      </AnimatePresence>
-
-      <div className="flex justify-between items-center mt-auto pt-4 border-t border-white/5 text-xs text-steel uppercase">
-        <span>Cagnotte de manche : {formatEuro(state.roundBanked)}</span>
-        <span>Total banqué : {formatEuro(state.totalBankedAllPlayers)}</span>
-      </div>
-      </div>
-
-      {/* right pedestals — desktop plateau only */}
-      <div className="hidden lg:flex flex-col gap-3 pt-6">
-        {rightRail.map((p: any) => (
-          <PlayerPedestal key={p.id} player={p} />
-        ))}
-      </div>
+    <div
+      className={`rounded-xl md:rounded-2xl px-2.5 py-1.5 md:px-4 md:py-2.5 backdrop-blur-md ${className}`}
+      style={{
+        background: red
+          ? "linear-gradient(180deg, rgba(42,12,20,0.82), rgba(10,4,8,0.86))"
+          : "linear-gradient(180deg, rgba(16,21,34,0.82), rgba(5,7,13,0.86))",
+        border: `1px solid ${red ? "rgba(255,61,88,0.45)" : "rgba(160,180,225,0.16)"}`,
+        boxShadow: red
+          ? "0 8px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 22px rgba(227,18,47,0.18)"
+          : "0 8px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.07)",
+      }}
+    >
+      <p
+        className={`text-[9px] md:text-[10px] uppercase tracking-[0.18em] font-semibold ${
+          red ? "text-blood" : "text-steel"
+        }`}
+      >
+        {label}
+      </p>
+      {children}
     </div>
   );
 }
 
-/** A real podium, not a card: portrait standing above a trapezoidal pupitre
- * base with a backlit nameplate, like a game-show contestant stand. Static
- * (one fade-in on mount) — the studio around it stays calm. */
-function PlayerPedestal({ player }: { player: any }) {
+/** Échelle de la chaîne : le palier courant est mis en évidence, les
+ *  paliers déjà franchis restent lisibles, les suivants s'effacent. */
+function ChainLadder({ steps, level }: { steps: number[]; level: number }) {
+  const rungs = [...steps].reverse(); // le plus gros gain en haut
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: player.connected ? 1 : 0.35, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="flex flex-col items-center"
-    >
-      <div className="relative mb-1">
-        <div
-          className="absolute inset-0 rounded-full blur-lg"
-          style={{ background: "radial-gradient(circle, rgba(227,18,47,0.22), transparent 70%)" }}
-        />
-        <CharacterPortrait seed={player.avatarSeed} size={48} grayscale={!player.connected} className="relative" />
-      </div>
-      {/* pupitre: tapered stand with a chrome rim and a glowing nameplate */}
-      <div
-        className="w-[72px] h-10 border-t border-white/10"
-        style={{
-          clipPath: "polygon(8% 0%, 92% 0%, 100% 100%, 0% 100%)",
-          background: "linear-gradient(180deg, #1a1420 0%, #0a0610 85%)",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
-        }}
-      />
-      <div className="w-14 h-[3px] bg-gradient-to-r from-transparent via-blood/50 to-transparent -mt-px" />
-      <span className="mt-1.5 text-[11px] font-semibold text-steel text-center truncate w-full">{player.name}</span>
-    </motion.div>
+    <div className="flex flex-col gap-[3px]">
+      <p className="text-[9px] uppercase tracking-[0.18em] text-steel font-semibold mb-1">Chaîne</p>
+      {rungs.map((amount, i) => {
+        const stepIndex = steps.length - 1 - i; // index dans l'ordre croissant
+        const current = stepIndex === level - 1;
+        const passed = stepIndex < level - 1;
+        return (
+          <div
+            key={amount}
+            className="flex items-center justify-end rounded-md px-2 py-[2px] transition-colors duration-300"
+            style={{
+              background: current
+                ? "linear-gradient(90deg, rgba(227,18,47,0.1), rgba(227,18,47,0.55))"
+                : passed
+                ? "rgba(160,180,225,0.07)"
+                : "rgba(160,180,225,0.025)",
+              border: `1px solid ${current ? "rgba(255,61,88,0.75)" : "rgba(160,180,225,0.08)"}`,
+              boxShadow: current ? "0 0 16px rgba(227,18,47,0.45)" : "none",
+            }}
+          >
+            <span
+              className={`font-display text-[11px] md:text-xs leading-none tabular-nums ${
+                current ? "text-white" : passed ? "text-goldSoft/75" : "text-steel/45"
+              }`}
+            >
+              {formatEuro(amount)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
+/** Compteur de question : 15 s, avec montée de tension sur le seul
+ *  compteur — le reste du plateau ne clignote pas (cahier des charges §10). */
 function CountdownRing({ seconds, total }: { seconds: number; total: number }) {
-  const pct = Math.max(0, Math.min(1, seconds / total));
-  const urgent = seconds <= 3;
+  const pct = Math.max(0, Math.min(1, seconds / Math.max(total, 1)));
+  // Paliers de tension : calme > 9, montée 5-9, puis 4, 3, 2, 1.
+  const tension = seconds > 9 ? 0 : seconds > 4 ? 1 : seconds > 3 ? 2 : seconds > 2 ? 3 : seconds > 0 ? 4 : 5;
+  const hot = tension >= 2;
+  const arc = tension >= 3 ? "#ff2f4b" : tension >= 1 ? "#ff6d3d" : "#d4af37";
+  const size = tension >= 3 ? 68 : tension >= 2 ? 62 : 56;
+
   return (
     <motion.div
-      animate={urgent ? { scale: [1, 1.15, 1] } : {}}
-      transition={{ duration: 0.5, repeat: urgent ? Infinity : 0 }}
-      className={`w-12 h-12 rounded-full flex items-center justify-center font-display text-lg border-2 ${
-        urgent ? "border-blood text-blood" : "border-white/30 text-white"
-      }`}
+      animate={tension >= 3 ? { scale: [1, 1.07, 1] } : { scale: 1 }}
+      transition={
+        tension >= 3
+          ? { duration: tension >= 4 ? 0.52 : 0.78, repeat: Infinity, ease: "easeInOut" }
+          : { duration: 0.3 }
+      }
+      className="relative shrink-0 rounded-full flex items-center justify-center"
       style={{
-        background: `conic-gradient(${urgent ? "#e3122f" : "#d4af37"} ${pct * 360}deg, rgba(255,255,255,0.06) 0deg)`,
+        width: size,
+        height: size,
+        background: `conic-gradient(${arc} ${pct * 360}deg, rgba(255,255,255,0.07) 0deg)`,
+        boxShadow: hot ? `0 0 ${tension >= 4 ? 28 : 18}px rgba(227,18,47,0.6)` : "none",
+        transition: "width 250ms ease, height 250ms ease, box-shadow 250ms ease",
       }}
+      aria-label={`${seconds} secondes restantes`}
     >
-      <span className="bg-void rounded-full w-9 h-9 flex items-center justify-center">
-        {seconds > 0 ? seconds : "0"}
+      <span
+        className="rounded-full bg-void flex items-center justify-center font-display tabular-nums"
+        style={{
+          width: size - 9,
+          height: size - 9,
+          fontSize: size * 0.42,
+          color: hot ? "#ff5f73" : "#ffffff",
+          transition: "color 250ms ease",
+        }}
+      >
+        {seconds > 0 ? seconds : 0}
       </span>
     </motion.div>
   );
 }
 
+function RoundPlay({ state, socket }: { state: any; socket: any }) {
+  const remaining = useCountdown(state.question && !state.lastAnswerResult ? state.questionDeadline : null);
+  const roundRemaining = useCountdown(state.roundEndsAt);
+  const { play } = useSound();
+  const questionTotal = state.questionDuration || 15;
+  const secs = Math.ceil(remaining / 1000);
+  const lastTick = useRef<number | null>(null);
+
+  const result = state.lastAnswerResult;
+  const revealing = !!result;
+  const isMyTurn = state.isMyTurn && !state.isSpectator;
+  const me = state.players.find((p: any) => p.id === state.viewerId);
+  const answered = me?.answeredCurrent;
+  const currentTurnPlayer = state.players.find((p: any) => p.id === state.currentTurnPlayerId);
+
+  // Réponse choisie localement : permet d'afficher « RÉPONSE ENREGISTRÉE »
+  // immédiatement, puis de surligner le choix du joueur à la révélation.
+  const [picked, setPicked] = useState<number | null>(null);
+  const qid = state.question?.id;
+  useEffect(() => {
+    setPicked(null);
+  }, [qid]);
+
+  useEffect(() => {
+    if (!state.question || revealing) return;
+    if (secs !== lastTick.current && secs <= 10 && secs > 0) {
+      lastTick.current = secs;
+      play(secs <= 4 ? "tick_urgent" : "tick");
+    }
+  }, [secs, state.question, revealing, play]);
+
+  const roundMin = Math.floor(roundRemaining / 60000);
+  const roundSec = Math.floor((roundRemaining % 60000) / 1000);
+
+  // Les candidats encore en lice, dans l'ordre de leur borne.
+  const roster = state.players
+    .filter((p: any) => !p.eliminated)
+    .sort((a: any, b: any) => (a.seat ?? 0) - (b.seat ?? 0));
+
+  const correctIndex = state.question?.correctIndex;
+  const revealed = correctIndex !== null && correctIndex !== undefined;
+
+  // Attitude du candidat sous le projecteur : il réfléchit pendant la
+  // question, réagit à la révélation.
+  const stageMood: "idle" | "thinking" | "answering" | "happy" | "sad" = result
+    ? result.correct
+      ? "happy"
+      : "sad"
+    : picked !== null
+    ? "answering"
+    : state.question
+    ? "thinking"
+    : "idle";
+
+  // `hasWebGL` touche au DOM : on ne l'évalue qu'après le montage client,
+  // sinon le rendu serveur et le rendu client divergent.
+  const [webgl, setWebgl] = useState(false);
+  useEffect(() => {
+    setWebgl(hasWebGL());
+  }, []);
+
+  function answerTone(idx: number) {
+    if (revealed) {
+      if (idx === correctIndex) return "correct";
+      if (idx === picked) return "wrong";
+      return "muted";
+    }
+    if (picked === idx) return "picked";
+    return "idle";
+  }
+
+  return (
+    <div className="relative min-h-screen flex flex-col">
+      {/* ================= PLATEAU ================= */}
+      <div className="relative">
+        {/* Desktop/tablette : le vrai plateau 3D — candidats en pied derrière
+            leurs bornes, plateau sombre, projecteur sur celui qui répond.
+            Si WebGL manque, on retombe sur le plateau CSS, même composition. */}
+        <div className="hidden md:block" style={{ height: "clamp(340px, 58vh, 700px)" }}>
+          {webgl ? (
+            <WebGLGuard
+              fallback={<Plateau className="h-full" players={roster} activeId={state.currentTurnPlayerId} />}
+            >
+              <Plateau3D
+                className="w-full h-full"
+                players={roster}
+                activeId={state.currentTurnPlayerId}
+                mood={stageMood}
+              />
+            </WebGLGuard>
+          ) : (
+            <Plateau className="h-full" players={roster} activeId={state.currentTurnPlayerId} />
+          )}
+        </div>
+        {/* Téléphone : même plateau 3D, mais cadré sur le candidat éclairé —
+            huit bornes alignées sur 375 px seraient illisibles. Sans WebGL,
+            on retombe sur la version CSS. */}
+        <div className="md:hidden" style={{ height: "clamp(230px, 34vh, 330px)" }}>
+          {webgl ? (
+            <WebGLGuard
+              fallback={<PlateauMobile players={roster} activeId={state.currentTurnPlayerId} />}
+            >
+              <Plateau3D
+                compact
+                className="w-full h-full"
+                players={roster}
+                activeId={state.currentTurnPlayerId}
+                mood={stageMood}
+              />
+            </WebGLGuard>
+          ) : (
+            <PlateauMobile players={roster} activeId={state.currentTurnPlayerId} />
+          )}
+        </div>
+
+        {/* --- HUD : coin haut gauche --- */}
+        <div className="absolute top-2 left-2 md:top-5 md:left-5 z-20">
+          <HudPanel label="Cagnotte" tone="red">
+            <AnimatedAmount
+              value={state.totalBankedAllPlayers}
+              className="font-display text-lg md:text-3xl text-white leading-none tabular-nums"
+            />
+          </HudPanel>
+        </div>
+
+        {/* --- HUD : coin haut droit --- */}
+        {/* décalé à droite pour ne pas passer sous le bouton son (fixe) */}
+        <div className="absolute top-2 right-16 md:top-5 md:right-20 z-20">
+          <HudPanel label="Temps restant" tone="red">
+            <p className="font-display text-lg md:text-3xl text-white leading-none tabular-nums">
+              {String(roundMin).padStart(2, "0")}:{String(roundSec).padStart(2, "0")}
+            </p>
+          </HudPanel>
+        </div>
+
+        {/* --- HUD : manche / joueurs restants --- */}
+        <div className="absolute bottom-2 left-3 md:left-5 z-20 hidden sm:flex gap-2">
+          <HudPanel label="Manche">
+            <p className="font-display text-base md:text-xl text-white leading-none">{state.roundNumber}</p>
+          </HudPanel>
+          <HudPanel label="En jeu">
+            <p className="font-display text-base md:text-xl text-white leading-none">{state.activeCount}</p>
+          </HudPanel>
+        </div>
+      </div>
+
+      {/* ================= ZONE DE JEU ================= */}
+      <div className="relative z-20 flex-1 px-3 md:px-6 pb-8 -mt-4 md:-mt-10">
+        <div className="mx-auto w-full max-w-[1500px] flex gap-4 xl:gap-6 items-start justify-center">
+          {/* chaîne — rail gauche sur grand écran */}
+          <div className="hidden xl:block w-[112px] shrink-0 pt-4">
+            <ChainLadder steps={state.chainSteps} level={state.chainLevel} />
+          </div>
+
+          {/* colonne centrale */}
+          <div className="flex-1 min-w-0 max-w-[820px] flex flex-col gap-3 md:gap-4">
+            {/* bandeau du candidat en lumière */}
+            {currentTurnPlayer && (
+              <motion.div
+                key={currentTurnPlayer.id + String(revealing)}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+                className="flex justify-center"
+              >
+                <div
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-full"
+                  style={{
+                    background: isMyTurn
+                      ? "linear-gradient(90deg, rgba(227,18,47,0.25), rgba(227,18,47,0.08))"
+                      : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${isMyTurn ? "rgba(255,61,88,0.6)" : "rgba(255,255,255,0.1)"}`,
+                  }}
+                >
+                  <span className="font-display text-sm md:text-base text-white uppercase">
+                    {isMyTurn ? "À toi de jouer" : `${currentTurnPlayer.name} répond`}
+                  </span>
+                </div>
+              </motion.div>
+            )}
+
+            {/* verdict */}
+            <AnimatePresence>
+              {result && <VerdictStrip key="verdict" result={result} />}
+            </AnimatePresence>
+
+            {/* question */}
+            <AnimatePresence mode="wait">
+              {state.question ? (
+                <motion.div
+                  key={state.question.id}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex flex-col gap-3"
+                >
+                  {/* carte question */}
+                  <div
+                    className="relative rounded-2xl px-4 py-4 md:px-7 md:py-5 backdrop-blur-md"
+                    style={{
+                      background: "linear-gradient(180deg, rgba(16,21,34,0.9), rgba(5,7,13,0.92))",
+                      border: "1px solid rgba(160,180,225,0.17)",
+                      boxShadow: "0 18px 50px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.07)",
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-blood font-bold mb-1.5">
+                          {state.question.category}
+                        </p>
+                        <h2 className="font-display text-xl md:text-3xl text-white leading-snug">
+                          {state.question.question}
+                        </h2>
+                      </div>
+                      {!revealing && <CountdownRing seconds={secs} total={questionTotal} />}
+                    </div>
+                  </div>
+
+                  {/* réponses */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 md:gap-3">
+                    {state.question.choices.map((c: string, idx: number) => {
+                      const tone = answerTone(idx);
+                      const clickable = isMyTurn && !answered && !revealing;
+                      return (
+                        <button
+                          key={idx}
+                          disabled={!clickable}
+                          onClick={() => {
+                            setPicked(idx);
+                            socket.emit("submit_answer", { choiceIndex: idx });
+                          }}
+                          className={`group flex items-center gap-3 rounded-2xl px-3 py-3 md:px-4 md:py-3.5 text-left transition-all duration-200 ${
+                            clickable ? "active:scale-[0.985]" : "cursor-default"
+                          }`}
+                          style={{
+                            minHeight: 58,
+                            background:
+                              tone === "correct"
+                                ? "linear-gradient(180deg, rgba(22,101,52,0.5), rgba(5,30,16,0.75))"
+                                : tone === "wrong"
+                                ? "linear-gradient(180deg, rgba(120,12,30,0.5), rgba(30,4,10,0.75))"
+                                : tone === "picked"
+                                ? "linear-gradient(180deg, rgba(120,12,30,0.4), rgba(20,6,12,0.8))"
+                                : "linear-gradient(180deg, rgba(16,21,34,0.85), rgba(5,7,13,0.9))",
+                            border: `1.5px solid ${
+                              tone === "correct"
+                                ? "rgba(74,222,128,0.85)"
+                                : tone === "wrong" || tone === "picked"
+                                ? "rgba(255,61,88,0.85)"
+                                : "rgba(160,180,225,0.16)"
+                            }`,
+                            boxShadow:
+                              tone === "correct"
+                                ? "0 0 26px rgba(34,197,94,0.35)"
+                                : tone === "wrong" || tone === "picked"
+                                ? "0 0 26px rgba(227,18,47,0.4)"
+                                : "inset 0 1px 0 rgba(255,255,255,0.05)",
+                            opacity: tone === "muted" ? 0.45 : 1,
+                          }}
+                        >
+                          <span
+                            className="shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center font-display text-base"
+                            style={{
+                              border: `1.5px solid ${
+                                tone === "correct"
+                                  ? "rgba(74,222,128,0.9)"
+                                  : tone === "wrong" || tone === "picked"
+                                  ? "rgba(255,61,88,0.9)"
+                                  : "rgba(180,198,240,0.35)"
+                              }`,
+                              color:
+                                tone === "correct"
+                                  ? "#86efac"
+                                  : tone === "wrong" || tone === "picked"
+                                  ? "#ff8095"
+                                  : "#dbe3f5",
+                            }}
+                          >
+                            {"ABCD"[idx]}
+                          </span>
+                          <span
+                            className={`text-sm md:text-base font-medium leading-snug ${
+                              clickable ? "text-white group-hover:text-white" : "text-white/85"
+                            }`}
+                          >
+                            {c}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* réponse enregistrée */}
+                  <AnimatePresence>
+                    {picked !== null && !revealing && (
+                      <motion.p
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="text-center font-display text-base md:text-lg uppercase tracking-widest text-gold"
+                      >
+                        Réponse enregistrée
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+
+                  {/* banquer */}
+                  {isMyTurn && !answered && !revealing && (
+                    <div className="flex justify-center pt-1">
+                      <BigButton
+                        onClick={() => socket.emit("choose_bank")}
+                        disabled={state.chain <= 0}
+                        className="w-full sm:w-auto sm:min-w-[320px] !py-3.5"
+                      >
+                        <span className="flex flex-col items-center leading-tight">
+                          <span>💰 BANQUER</span>
+                          <span className="text-sm font-body font-semibold opacity-90">
+                            {formatEuro(state.chain)}
+                          </span>
+                        </span>
+                      </BigButton>
+                    </div>
+                  )}
+                  {!isMyTurn && !state.isSpectator && !revealing && (
+                    <p className="text-center text-steel text-[11px] md:text-xs uppercase tracking-widest">
+                      Patientez, ce n'est pas votre tour
+                    </p>
+                  )}
+                </motion.div>
+              ) : state.lastBankEvent ? (
+                <BankBanner key="bank" event={state.lastBankEvent} players={state.players} />
+              ) : null}
+            </AnimatePresence>
+
+            {/* chaîne + gains, repliés sous la question en dessous de xl */}
+            <div className="xl:hidden flex flex-wrap items-stretch justify-center gap-2 pt-1">
+              <div
+                className="flex items-center gap-2 rounded-xl px-3 py-2"
+                style={{
+                  background: "rgba(16,21,34,0.75)",
+                  border: "1px solid rgba(160,180,225,0.14)",
+                }}
+              >
+                <span className="text-[9px] uppercase tracking-widest text-steel">Chaîne</span>
+                <AnimatedAmount value={state.chain} className="font-display text-lg text-gold leading-none" />
+                <span className="flex gap-1 ml-1">
+                  {state.chainSteps.map((_: number, i: number) => (
+                    <span
+                      key={i}
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{
+                        background: i < state.chainLevel ? "#d4af37" : "rgba(255,255,255,0.12)",
+                        boxShadow: i < state.chainLevel ? "0 0 6px rgba(212,175,55,0.7)" : "none",
+                      }}
+                    />
+                  ))}
+                </span>
+              </div>
+              {me && (
+                <div
+                  className="flex items-center gap-3 rounded-xl px-3 py-2"
+                  style={{
+                    background: "rgba(16,21,34,0.75)",
+                    border: "1px solid rgba(160,180,225,0.14)",
+                  }}
+                >
+                  <span className="text-[9px] uppercase tracking-widest text-steel">Vos gains</span>
+                  <span className="font-display text-lg text-white leading-none">{formatEuro(me.banked)}</span>
+                  <span className="text-[11px] text-green-400 font-semibold">✓ {me.correctCount}</span>
+                  <span className="text-[11px] text-blood font-semibold">✕ {me.wrongCount}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* gains — rail droit sur grand écran */}
+          <div className="hidden xl:block w-[150px] shrink-0 pt-4">
+            {me && (
+              <HudPanel label="Vos gains">
+                <AnimatedAmount
+                  value={me.banked}
+                  className="font-display text-2xl text-white leading-none tabular-nums"
+                />
+                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-white/10">
+                  <span className="flex items-center gap-1 text-green-400 text-xs font-bold">
+                    <span className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center text-[9px]">
+                      ✓
+                    </span>
+                    {me.correctCount}
+                  </span>
+                  <span className="flex items-center gap-1 text-blood text-xs font-bold">
+                    <span className="w-4 h-4 rounded-full bg-blood/20 flex items-center justify-center text-[9px]">
+                      ✕
+                    </span>
+                    {me.wrongCount}
+                  </span>
+                </div>
+                <p className="text-[8px] uppercase tracking-widest text-steel mt-1.5">Bonnes · Mauvaises</p>
+              </HudPanel>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Verdict compact affiché au-dessus de la question, sans masquer le
+ *  plateau : le candidat reste sous le projecteur pendant la révélation. */
+function VerdictStrip({ result }: { result: any }) {
+  const good = result.correct;
+  const label = result.timedOut ? "TEMPS ÉCOULÉ" : good ? "BONNE RÉPONSE" : "MAUVAISE RÉPONSE";
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.94 }}
+      animate={
+        good
+          ? { opacity: 1, scale: 1 }
+          : { opacity: 1, scale: 1, x: [0, -7, 6, -4, 0] }
+      }
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: good ? 0.3 : 0.45 }}
+      className="flex justify-center"
+    >
+      <div
+        className="flex items-center gap-3 rounded-2xl px-5 py-2.5"
+        style={{
+          background: good
+            ? "linear-gradient(90deg, rgba(22,101,52,0.45), rgba(5,30,16,0.6))"
+            : "linear-gradient(90deg, rgba(120,12,30,0.45), rgba(30,4,10,0.6))",
+          border: `1.5px solid ${good ? "rgba(74,222,128,0.6)" : "rgba(255,61,88,0.7)"}`,
+          boxShadow: good ? "0 0 30px rgba(34,197,94,0.25)" : "0 0 30px rgba(227,18,47,0.3)",
+        }}
+      >
+        <span
+          className={`font-display text-2xl md:text-3xl uppercase leading-none ${
+            good ? "text-green-400" : "text-blood"
+          }`}
+        >
+          {label}
+        </span>
+        {!good && (
+          <span className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-blood/85 font-semibold border-l border-blood/40 pl-3">
+            Chaîne brisée
+          </span>
+        )}
+      </div>
+    </motion.div>
+  );
+}
 function ResultBanner({ result, players }: { result: any; players: any[] }) {
   const player = players.find((p) => p.id === result.playerId);
   return (

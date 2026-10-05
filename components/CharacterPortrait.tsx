@@ -42,6 +42,17 @@ export function getArchetypeIndex(seed: number) {
   return n % PORTRAITS.length;
 }
 
+/** Raw asset path for a seed — used by the plateau, which renders the bust
+ *  full-frame (masked into the dark set) rather than cropped into a disc. */
+export function getPortraitSrc(seed: number) {
+  return `/characters/${PORTRAITS[getArchetypeIndex(seed)]}.png`;
+}
+
+/** Per-archetype accent, reused by the plateau for the podium nameplate. */
+export function getPortraitAccent(seed: number) {
+  return ACCENTS[getArchetypeIndex(seed) % ACCENTS.length];
+}
+
 export function CharacterPortrait({
   seed,
   size = 96,
