@@ -55,18 +55,22 @@ export function getPortraitAccent(seed: number) {
 
 export function CharacterPortrait({
   seed,
+  character,
   size = 96,
   glow = false,
   grayscale = false,
   className = "",
 }: {
   seed: number;
+  /** Index d'apparence attribué par le serveur : quand il est fourni, le
+   *  portrait montre exactement le personnage qui montera sur le plateau. */
+  character?: number;
   size?: number;
   glow?: boolean;
   grayscale?: boolean;
   className?: string;
 }) {
-  const idx = getArchetypeIndex(seed);
+  const idx = character !== undefined && character !== null ? character % PORTRAITS.length : getArchetypeIndex(seed);
   const file = PORTRAITS[idx];
   const accent = ACCENTS[idx % ACCENTS.length];
 

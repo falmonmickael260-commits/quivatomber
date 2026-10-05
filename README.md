@@ -19,7 +19,7 @@ Ouvrez `http://localhost:3000`. Pour tester en multijoueur local, ouvrez plusieu
 - **`lib/gameEngine.js`** — moteur de jeu **autoritatif côté serveur** : toute la logique (chaîne, banque, votes, élimination, départage d'égalité, finale) y vit. Le client n'affiche que ce que le serveur lui envoie ; les bonnes réponses ne sont jamais transmises avant résolution (anti-triche).
 - **`lib/questions.js`** — banque de questions (11 catégories, 3 niveaux de difficulté).
 - **`components/Plateau3D.tsx`** — le plateau : décor de studio, bornes, et le projecteur qui suit le candidat actif. Tout est construit à partir de primitives Three.js (aucun modèle ni texture à charger).
-- **`components/stage/Character3D.tsx`** — candidats en pied, assemblés en capsules et sphères ; leur apparence (peau, coiffure, tenue, carrure) est dérivée de l'`avatarSeed` que le serveur attribue, donc stable d'une manche à l'autre et après reconnexion.
+- **`components/stage/Character3D.tsx`** — candidats en pied : les modèles 3D riggés de `public/models/*.glb` (les mêmes que QuizzMaster), avec leurs animations d'origine commutées selon le moment du jeu. Le serveur attribue une apparence par joueur sans remise, si bien que deux candidats d'une même partie ne peuvent pas se ressembler, et que le portrait du lobby montre la même personne que le plateau.
 - **`components/Plateau.tsx`** — même plateau en CSS/SVG, utilisé en repli quand WebGL est indisponible.
 - **`lib/session.ts`** — persistance de session joueur (code / id / token) en `localStorage`, utilisée pour la reconnexion automatique après rafraîchissement ou coupure réseau.
 - **`pages/`** — Accueil, Créer, Rejoindre, Règles, et `game/[code].tsx` qui pilote l'intégralité de la partie (un composant par phase : lobby, intro, manche, résumé, vote, révélation, départage, élimination, transition, finale, victoire).
@@ -79,7 +79,8 @@ relais : même composition, en CSS/SVG.
 - **Comptes / classement / historique** : non implémentés (le jeu fonctionne par pseudo, sans compte), mais l'architecture (ids de joueurs, stats par manche) est prête pour les brancher plus tard.
 - **Audit de sécurité des dépendances** : `next@14.2.35` reste ciblé par des advisories npm très larges concernant des fonctionnalités non utilisées ici (Server Actions, `next/image`, middleware, App Router) — ce projet utilise uniquement le Pages Router avec un serveur custom minimal. À réévaluer avant une mise en production réelle (migration vers Next 15/16 recommandée à terme).
 - Banque de questions volontairement limitée pour la démo (~65 questions) ; à étoffer pour éviter les répétitions sur de longues parties.
-- **Expressions des candidats** : les personnages ont quatre attitudes (attente, réflexion, bonne/mauvaise réponse). De quoi lire la scène, pas une vraie animation faciale.
+- **Poids des modèles** : 21 personnages × ~500 Ko dans `public/models`, dont 8 chargés par partie. Ils sont mis en cache par le navigateur mais ce sont ~4 Mo au premier chargement d'une manche. À passer en Draco/meshopt si cela devient gênant.
+- **Expressions des candidats** : on se limite aux cinq animations fournies avec les modèles (attente, neutre, interaction, salut, encaissement). Pas d'animation faciale.
 
 ## Tests effectués
 

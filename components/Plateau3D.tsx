@@ -26,6 +26,8 @@ const GOLD = "#d4af37";
 export type PlateauPlayer3D = {
   id: string;
   seat?: number;
+  /** Index d'apparence attribué par le serveur. */
+  character?: number;
   name: string;
   avatarSeed: number;
   connected?: boolean;
@@ -34,7 +36,7 @@ export type PlateauPlayer3D = {
 /* ─── placement des sièges sur l'arc ────────────────────────────────── */
 const ARC_RADIUS = 10.4;
 /** Décalage du candidat derrière sa borne. */
-const CHARACTER_Z = -0.62;
+const CHARACTER_Z = -0.34;
 
 function seatTransform(index: number, total: number) {
   // Demi-angle de l'arc : il s'ouvre avec le nombre de candidats, mais reste
@@ -191,7 +193,7 @@ function Seat({
       <Podium seat={player.seat ?? index + 1} name={player.name} active={active} offline={player.connected === false} />
       {/* le candidat se tient derrière son pupitre */}
       <group position={[0, 0, CHARACTER_Z]}>
-        <Character3D seat={player.seat ?? index + 1} seed={player.avatarSeed} mood={mood} />
+        <Character3D character={player.character} seed={player.avatarSeed} mood={mood} />
       </group>
     </group>
   );

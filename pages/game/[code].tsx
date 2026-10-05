@@ -261,7 +261,7 @@ function Lobby({ state, socket }: { state: any; socket: any }) {
             >
               <Panel className={`p-4 flex flex-col items-center gap-2 ${!p.connected ? "opacity-40" : ""}`}>
                 <span className="text-[10px] text-steel uppercase">Joueur {i + 1}</span>
-                <CharacterPortrait seed={p.avatarSeed} size={56} />
+                <CharacterPortrait seed={p.avatarSeed} character={p.character} size={56} />
                 <span className="font-semibold text-sm text-white truncate max-w-full">{p.name}</span>
                 {p.isHost && <span className="text-[10px] text-gold uppercase">Hôte</span>}
                 <span
@@ -365,7 +365,7 @@ function Intro({ state }: { state: any }) {
             transition={{ delay: 0.3 + i * 0.35, type: "spring", stiffness: 160, damping: 14 }}
             className="flex flex-col items-center gap-2"
           >
-            <CharacterPortrait seed={p.avatarSeed} size={88} />
+            <CharacterPortrait seed={p.avatarSeed} character={p.character} size={88} />
             <span className="font-display text-xl text-white uppercase">{p.name}</span>
             <span className="text-[10px] text-steel uppercase">Joueur {i + 1}</span>
           </motion.div>
@@ -964,7 +964,7 @@ function ResultBanner({ result, players }: { result: any; players: any[] }) {
         }`}
       >
         <div className="flex items-center justify-center gap-3 mb-3">
-          <CharacterPortrait seed={player?.avatarSeed} size={48} />
+          <CharacterPortrait seed={player?.avatarSeed} character={player?.character} size={48} />
           <span className="font-display text-xl text-white uppercase">{player?.name}</span>
         </div>
         <h2
@@ -986,7 +986,7 @@ function BankBanner({ event, players }: { event: any; players: any[] }) {
     <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
       <Panel className="p-10 text-center border-2 border-gold/60 bg-gold/5">
         <div className="flex items-center justify-center gap-3 mb-3">
-          <CharacterPortrait seed={player?.avatarSeed} size={48} />
+          <CharacterPortrait seed={player?.avatarSeed} character={player?.character} size={48} />
           <span className="font-display text-xl text-white uppercase">{player?.name}</span>
         </div>
         <h2 className="font-display text-5xl uppercase text-gold mb-2">BANQUE !</h2>
@@ -1068,7 +1068,7 @@ function VotePhase({ state, socket }: { state: any; socket: any }) {
                   : "border-white/15 bg-white/5 hover:border-blood hover:bg-blood/10 active:scale-95"
               }`}
             >
-              <CharacterPortrait seed={p.avatarSeed} size={64} />
+              <CharacterPortrait seed={p.avatarSeed} character={p.character} size={64} />
               <span className="font-semibold text-white text-sm">{p.name}</span>
             </button>
           ))}
@@ -1132,7 +1132,7 @@ function RevealPhase({ state }: { state: any }) {
                 >
                   <Panel className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <CharacterPortrait seed={player?.avatarSeed} size={40} />
+                      <CharacterPortrait seed={player?.avatarSeed} character={player?.character} size={40} />
                       <span className="font-semibold text-white">{player?.name}</span>
                     </div>
                     <span className="font-display text-2xl text-blood">
@@ -1214,7 +1214,7 @@ function EliminationPhase({ state }: { state: any }) {
           animate={{ y: [0, 0, 60], opacity: [1, 1, 0], filter: ["grayscale(0)", "grayscale(0)", "grayscale(1)"] }}
           transition={{ duration: 2.6, delay: 1.6, times: [0, 0.6, 1], ease: "easeIn" }}
         >
-          <CharacterPortrait seed={player?.avatarSeed} size={110} glow />
+          <CharacterPortrait seed={player?.avatarSeed} character={player?.character} size={110} glow />
         </motion.div>
 
         <motion.h2
@@ -1313,7 +1313,7 @@ function FinaleIntro({ state }: { state: any }) {
               transition={{ delay: 0.4, duration: 0.8, ease: "backOut" }}
               className="flex flex-col items-center gap-3"
             >
-              <CharacterPortrait seed={p?.avatarSeed} size={120} glow />
+              <CharacterPortrait seed={p?.avatarSeed} character={p?.character} size={120} glow />
               <span className="font-display text-xl md:text-2xl text-white uppercase">{p?.name}</span>
             </motion.div>
             {i === 0 && (
@@ -1358,7 +1358,7 @@ function FinalePhase({ state, socket }: { state: any; socket: any }) {
       <div className="flex items-center justify-center gap-6">
         {finalists?.map((p: any) => (
           <div key={p?.id} className="flex flex-col items-center gap-1">
-            <CharacterPortrait seed={p?.avatarSeed} size={56} />
+            <CharacterPortrait seed={p?.avatarSeed} character={p?.character} size={56} />
             <span className="text-sm font-semibold text-white">{p?.name}</span>
             <span className="font-display text-3xl text-gold">{state.finale?.scores[p?.id] ?? 0}</span>
           </div>
@@ -1432,7 +1432,7 @@ function VictoryPhase({ state }: { state: any }) {
         className="flex flex-col items-center gap-4"
       >
         <div className="text-6xl">🏆</div>
-        <CharacterPortrait seed={winner?.avatarSeed} size={120} />
+        <CharacterPortrait seed={winner?.avatarSeed} character={winner?.character} size={120} />
         <h2
           className="font-display text-5xl md:text-7xl text-gold uppercase"
           style={{ textShadow: "0 0 60px rgba(212,175,55,0.7)" }}

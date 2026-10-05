@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getPortraitSrc } from "@/components/CharacterPortrait";
+import { portraitUrl } from "@/components/stage/characterPresets";
 
 /**
  * Plateau de « QUI VA TOMBER ? » — décor de studio TV en CSS + SVG.
@@ -22,6 +22,7 @@ import { getPortraitSrc } from "@/components/CharacterPortrait";
 export type PlateauPlayer = {
   id: string;
   seat?: number;
+  character?: number;
   name: string;
   avatarSeed: number;
   connected?: boolean;
@@ -350,7 +351,7 @@ function Seat({
         )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={getPortraitSrc(player.avatarSeed)}
+          src={portraitUrl(player.character, player.avatarSeed)}
           alt=""
           width={256}
           height={256}
@@ -714,7 +715,7 @@ export function PlateauMobile({
               />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={getPortraitSrc(active.avatarSeed)}
+                src={portraitUrl(active.character, active.avatarSeed)}
                 alt=""
                 width={256}
                 height={256}
@@ -781,7 +782,7 @@ export function PlateauMobile({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={getPortraitSrc(p.avatarSeed)}
+                  src={portraitUrl(p.character, p.avatarSeed)}
                   alt=""
                   width={256}
                   height={256}
