@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Background } from "@/components/Background";
+import { StudioBackdrop } from "@/components/StudioBackdrop";
 import { MuteButton, BigButton, Panel } from "@/components/UI";
 import { CharacterPortrait } from "@/components/CharacterPortrait";
 import { AnimatedAmount, formatEuro } from "@/components/AnimatedAmount";
@@ -134,6 +135,11 @@ export default function GamePage() {
   return (
     <div className="relative min-h-screen overflow-hidden">
       <Background intensity={state.phase === "ELIMINATION" || state.phase === "REVEAL" ? 1.3 : 0.6} />
+      {["ROUND_PLAY", "VOTE", "REVEAL", "TIEBREAK", "ELIMINATION", "ROUND_TRANSITION"].includes(state.phase) && (
+        <div className="hidden lg:block">
+          <StudioBackdrop />
+        </div>
+      )}
       <MuteButton />
       {state.isSpectator && state.phase !== "VICTORY" && <SpectatorBanner />}
       <AnimatePresence mode="wait">
@@ -437,10 +443,20 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
           initial={{ opacity: 0, scale: 0.9, y: -8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 220, damping: 20 }}
-          className="flex justify-center"
+          className="relative flex justify-center"
         >
+          {/* fixed overhead spotlight cone, grounds the active player on the
+              studio floor — static, not animated */}
           <div
-            className={`flex items-center gap-4 px-6 py-3 rounded-2xl border backdrop-blur-xl ${
+            className="hidden lg:block absolute -top-16 left-1/2 -translate-x-1/2 w-72 h-40 pointer-events-none"
+            style={{
+              background: isMyTurn
+                ? "conic-gradient(from 180deg at 50% 0%, transparent 35%, rgba(227,18,47,0.16) 50%, transparent 65%)"
+                : "conic-gradient(from 180deg at 50% 0%, transparent 38%, rgba(255,255,255,0.06) 50%, transparent 62%)",
+            }}
+          />
+          <div
+            className={`relative flex items-center gap-4 px-6 py-3 rounded-2xl border backdrop-blur-xl ${
               isMyTurn
                 ? "border-blood/60 bg-blood/10 shadow-glowRed"
                 : "border-white/10 bg-white/[0.03]"
@@ -537,20 +553,35 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
   );
 }
 
-/** Quiet, static "seated candidate" tile for the desktop plateau rails. No
- * looping animation — it only fades in once when a player appears there. */
+/** A real podium, not a card: portrait standing above a trapezoidal pupitre
+ * base with a backlit nameplate, like a game-show contestant stand. Static
+ * (one fade-in on mount) — the studio around it stays calm. */
 function PlayerPedestal({ player }: { player: any }) {
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: player.connected ? 1 : 0.35, y: 0 }}
       transition={{ duration: 0.4 }}
-      className={`flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border ${
-        player.connected ? "border-white/[0.06] bg-white/[0.015]" : "border-white/[0.03] bg-transparent opacity-40"
-      }`}
+      className="flex flex-col items-center"
     >
-      <CharacterPortrait seed={player.avatarSeed} size={44} grayscale={!player.connected} />
-      <span className="text-[11px] text-steel text-center truncate w-full">{player.name}</span>
+      <div className="relative mb-1">
+        <div
+          className="absolute inset-0 rounded-full blur-lg"
+          style={{ background: "radial-gradient(circle, rgba(227,18,47,0.22), transparent 70%)" }}
+        />
+        <CharacterPortrait seed={player.avatarSeed} size={48} grayscale={!player.connected} className="relative" />
+      </div>
+      {/* pupitre: tapered stand with a chrome rim and a glowing nameplate */}
+      <div
+        className="w-[72px] h-10 border-t border-white/10"
+        style={{
+          clipPath: "polygon(8% 0%, 92% 0%, 100% 100%, 0% 100%)",
+          background: "linear-gradient(180deg, #1a1420 0%, #0a0610 85%)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+        }}
+      />
+      <div className="w-14 h-[3px] bg-gradient-to-r from-transparent via-blood/50 to-transparent -mt-px" />
+      <span className="mt-1.5 text-[11px] font-semibold text-steel text-center truncate w-full">{player.name}</span>
     </motion.div>
   );
 }
