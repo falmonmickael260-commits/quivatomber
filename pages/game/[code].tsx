@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Background } from "@/components/Background";
 import { MuteButton, BigButton, Panel } from "@/components/UI";
-import { Avatar } from "@/components/Avatar";
+import { CharacterPortrait } from "@/components/CharacterPortrait";
 import { AnimatedAmount, formatEuro } from "@/components/AnimatedAmount";
 import { Logo } from "@/components/Logo";
 import { useSocket } from "@/hooks/useSocket";
@@ -29,7 +29,7 @@ export default function GamePage() {
   const router = useRouter();
   const { code } = router.query as { code?: string };
   const { socket, connected } = useSocket();
-  const { play } = useSound();
+  const { play, startTension, stopTension } = useSound();
 
   const [state, setState] = useState<any>(null);
   const [joinError, setJoinError] = useState("");
@@ -69,6 +69,8 @@ export default function GamePage() {
     };
   }, [socket]);
 
+  useEffect(() => () => stopTension(), [stopTension]);
+
   // sound reactions to state transitions
   useEffect(() => {
     if (!state) return;
@@ -76,12 +78,19 @@ export default function GamePage() {
       prevPhase.current = state.phase;
       if (state.phase === "COUNTDOWN") play("whoosh");
       if (state.phase === "INTRO") play("heartbeat");
-      if (state.phase === "VOTE") play("whoosh");
+      if (state.phase === "VOTE") {
+        play("whoosh");
+        startTension();
+      }
       if (state.phase === "REVEAL") play("heartbeat");
-      if (state.phase === "ELIMINATION") play("elimination");
+      if (state.phase === "ELIMINATION") {
+        play("elimination");
+        stopTension();
+      }
       if (state.phase === "FINALE_INTRO" || state.phase === "FINALE") play("finale");
       if (state.phase === "VICTORY") play("victory");
       if (state.phase === "ROUND_SUMMARY") play("round_end");
+      if (state.phase !== "VOTE" && state.phase !== "REVEAL") stopTension();
     }
     if (state.players?.length !== prevPlayerCount.current) {
       if (prevPlayerCount.current !== 0 && state.players.length > prevPlayerCount.current) play("join");
@@ -233,7 +242,7 @@ function Lobby({ state, socket }: { state: any; socket: any }) {
             >
               <Panel className={`p-4 flex flex-col items-center gap-2 ${!p.connected ? "opacity-40" : ""}`}>
                 <span className="text-[10px] text-steel uppercase">Joueur {i + 1}</span>
-                <Avatar seed={p.avatarSeed} name={p.name} size={56} />
+                <CharacterPortrait seed={p.avatarSeed} size={56} />
                 <span className="font-semibold text-sm text-white truncate max-w-full">{p.name}</span>
                 {p.isHost && <span className="text-[10px] text-gold uppercase">Hôte</span>}
                 <span
@@ -337,7 +346,7 @@ function Intro({ state }: { state: any }) {
             transition={{ delay: 0.3 + i * 0.35, type: "spring", stiffness: 160, damping: 14 }}
             className="flex flex-col items-center gap-2"
           >
-            <Avatar seed={p.avatarSeed} name={p.name} size={88} />
+            <CharacterPortrait seed={p.avatarSeed} size={88} />
             <span className="font-display text-xl text-white uppercase">{p.name}</span>
             <span className="text-[10px] text-steel uppercase">Joueur {i + 1}</span>
           </motion.div>
@@ -371,10 +380,17 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
   const roundMin = Math.floor(roundRemaining / 60000);
   const roundSec = Math.floor((roundRemaining % 60000) / 1000);
 
+  // Desktop gets a real plateau: other candidates seated either side of the
+  // central screen. Mobile never sees this — it stays question-first, one
+  // column, nothing to scroll past to reach the answer buttons.
+  const others = state.players.filter((p: any) => !p.eliminated && p.id !== state.currentTurnPlayerId);
+  const leftRail = others.filter((_: any, i: number) => i % 2 === 0);
+  const rightRail = others.filter((_: any, i: number) => i % 2 === 1);
+
   return (
-    <div className="min-h-screen flex flex-col px-4 py-6 gap-6 max-w-3xl mx-auto">
+    <div className="min-h-screen px-4 py-6 lg:px-8 lg:py-10 flex flex-col lg:grid lg:grid-cols-[180px_minmax(0,760px)_180px] lg:justify-center lg:gap-8">
       {/* top bar */}
-      <div className="flex items-center justify-between text-xs md:text-sm text-steel uppercase tracking-widest">
+      <div className="flex items-center justify-between text-xs md:text-sm text-steel uppercase tracking-widest lg:col-span-3 pr-14 sm:pr-0">
         <span>Manche {state.roundNumber}</span>
         <span className="font-display text-base">
           Temps restant : <span className="text-white">{roundMin}:{String(roundSec).padStart(2, "0")}</span>
@@ -382,6 +398,14 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
         <span>{state.activeCount} joueurs en jeu</span>
       </div>
 
+      {/* left pedestals — desktop plateau only */}
+      <div className="hidden lg:flex flex-col gap-3 pt-6">
+        {leftRail.map((p: any) => (
+          <PlayerPedestal key={p.id} player={p} />
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-6 w-full max-w-3xl mx-auto lg:max-w-none lg:mx-0 lg:bg-white/[0.015] lg:border lg:border-white/[0.07] lg:rounded-3xl lg:p-8">
       {/* chain */}
       <div className="flex flex-col items-center gap-2 py-4">
         <span className="text-xs uppercase tracking-[0.3em] text-steel">Chaîne</span>
@@ -406,14 +430,32 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
         </div>
       </div>
 
-      {/* current player banner */}
+      {/* current player spotlight */}
       {!result && currentTurnPlayer && (
-        <div className="flex items-center justify-center gap-3">
-          <Avatar seed={currentTurnPlayer.avatarSeed} name={currentTurnPlayer.name} size={40} />
-          <span className="font-display text-xl uppercase text-white">
-            {isMyTurn ? "À VOUS DE JOUER" : `C'est le tour de ${currentTurnPlayer.name}`}
-          </span>
-        </div>
+        <motion.div
+          key={currentTurnPlayer.id}
+          initial={{ opacity: 0, scale: 0.9, y: -8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 220, damping: 20 }}
+          className="flex justify-center"
+        >
+          <div
+            className={`flex items-center gap-4 px-6 py-3 rounded-2xl border backdrop-blur-xl ${
+              isMyTurn
+                ? "border-blood/60 bg-blood/10 shadow-glowRed"
+                : "border-white/10 bg-white/[0.03]"
+            }`}
+          >
+            <CharacterPortrait seed={currentTurnPlayer.avatarSeed} size={52} glow={isMyTurn} />
+            <div className="text-left">
+              <p className="text-[10px] uppercase tracking-widest text-steel">En jeu</p>
+              <p className="font-display text-xl uppercase text-white leading-tight">{currentTurnPlayer.name}</p>
+              <p className={`text-xs uppercase tracking-widest font-semibold ${isMyTurn ? "text-blood" : "text-steel"}`}>
+                {isMyTurn ? "À vous de jouer" : "Joue en ce moment"}
+              </p>
+            </div>
+          </div>
+        </motion.div>
       )}
 
       {/* question card */}
@@ -483,7 +525,33 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
         <span>Cagnotte de manche : {formatEuro(state.roundBanked)}</span>
         <span>Total banqué : {formatEuro(state.totalBankedAllPlayers)}</span>
       </div>
+      </div>
+
+      {/* right pedestals — desktop plateau only */}
+      <div className="hidden lg:flex flex-col gap-3 pt-6">
+        {rightRail.map((p: any) => (
+          <PlayerPedestal key={p.id} player={p} />
+        ))}
+      </div>
     </div>
+  );
+}
+
+/** Quiet, static "seated candidate" tile for the desktop plateau rails. No
+ * looping animation — it only fades in once when a player appears there. */
+function PlayerPedestal({ player }: { player: any }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+      className={`flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border ${
+        player.connected ? "border-white/[0.06] bg-white/[0.015]" : "border-white/[0.03] bg-transparent opacity-40"
+      }`}
+    >
+      <CharacterPortrait seed={player.avatarSeed} size={44} grayscale={!player.connected} />
+      <span className="text-[11px] text-steel text-center truncate w-full">{player.name}</span>
+    </motion.div>
   );
 }
 
@@ -522,7 +590,7 @@ function ResultBanner({ result, players }: { result: any; players: any[] }) {
         }`}
       >
         <div className="flex items-center justify-center gap-3 mb-3">
-          <Avatar seed={player?.avatarSeed} name={player?.name || "?"} size={48} />
+          <CharacterPortrait seed={player?.avatarSeed} size={48} />
           <span className="font-display text-xl text-white uppercase">{player?.name}</span>
         </div>
         <h2
@@ -544,7 +612,7 @@ function BankBanner({ event, players }: { event: any; players: any[] }) {
     <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
       <Panel className="p-10 text-center border-2 border-gold/60 bg-gold/5">
         <div className="flex items-center justify-center gap-3 mb-3">
-          <Avatar seed={player?.avatarSeed} name={player?.name || "?"} size={48} />
+          <CharacterPortrait seed={player?.avatarSeed} size={48} />
           <span className="font-display text-xl text-white uppercase">{player?.name}</span>
         </div>
         <h2 className="font-display text-5xl uppercase text-gold mb-2">BANQUE !</h2>
@@ -626,7 +694,7 @@ function VotePhase({ state, socket }: { state: any; socket: any }) {
                   : "border-white/15 bg-white/5 hover:border-blood hover:bg-blood/10 active:scale-95"
               }`}
             >
-              <Avatar seed={p.avatarSeed} name={p.name} size={64} />
+              <CharacterPortrait seed={p.avatarSeed} size={64} />
               <span className="font-semibold text-white text-sm">{p.name}</span>
             </button>
           ))}
@@ -690,7 +758,7 @@ function RevealPhase({ state }: { state: any }) {
                 >
                   <Panel className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Avatar seed={player?.avatarSeed} name={player?.name || "?"} size={40} />
+                      <CharacterPortrait seed={player?.avatarSeed} size={40} />
                       <span className="font-semibold text-white">{player?.name}</span>
                     </div>
                     <span className="font-display text-2xl text-blood">
@@ -740,30 +808,80 @@ function EliminationPhase({ state }: { state: any }) {
   const r = state.eliminationResult;
   const player = state.players.find((p: any) => p.id === r?.playerId);
   const isMe = r?.playerId === state.viewerId;
+  const survivors = state.players.filter((p: any) => !p.eliminated && p.id !== r?.playerId);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 gap-6 bg-blood/5">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 gap-8 relative overflow-hidden">
+      {/* darkening vignette sweeps in */}
       <motion.div
-        initial={{ scale: 1.6, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.6, ease: "backOut" }}
-        className="flex flex-col items-center gap-4"
+        className="fixed inset-0 bg-black pointer-events-none"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.55 }}
+        transition={{ duration: 0.8 }}
+      />
+
+      <motion.p
+        initial={{ opacity: 0, letterSpacing: "0.1em" }}
+        animate={{ opacity: [0, 1, 1, 0], letterSpacing: "0.5em" }}
+        transition={{ duration: 1.3, times: [0, 0.3, 0.75, 1] }}
+        className="absolute font-display text-3xl md:text-4xl text-steel uppercase"
       >
-        <Avatar seed={player?.avatarSeed} name={player?.name || "?"} size={100} />
-        <h2 className="font-display text-4xl text-white uppercase">{player?.name}</h2>
-        <p className="text-steel text-xs uppercase tracking-widest">
-          A reçu le plus de votes
-        </p>
-        <motion.h3
+        Qui va tomber ?
+      </motion.p>
+
+      <motion.div
+        initial={{ scale: 1.5, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.7, delay: 1.1, ease: "backOut" }}
+        className="relative z-10 flex flex-col items-center gap-4"
+      >
+        {/* falling / exiting character: sinks, desaturates and fades near the end */}
+        <motion.div
+          animate={{ y: [0, 0, 60], opacity: [1, 1, 0], filter: ["grayscale(0)", "grayscale(0)", "grayscale(1)"] }}
+          transition={{ duration: 2.6, delay: 1.6, times: [0, 0.6, 1], ease: "easeIn" }}
+        >
+          <CharacterPortrait seed={player?.avatarSeed} size={110} glow />
+        </motion.div>
+
+        <motion.h2
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.4 }}
+          className="font-display text-4xl text-white uppercase"
+        >
+          {player?.name}
+        </motion.h2>
+        <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          className="font-display text-5xl md:text-6xl text-blood uppercase"
+          transition={{ delay: 1.6 }}
+          className="text-steel text-xs uppercase tracking-widest"
+        >
+          A reçu le plus de votes
+        </motion.p>
+        <motion.h3
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 2.0, type: "spring", stiffness: 200, damping: 14 }}
+          className="font-display text-5xl md:text-6xl text-blood uppercase text-center"
           style={{ textShadow: "0 0 60px rgba(227,18,47,0.8)" }}
         >
-          {isMe ? "VOUS ALLEZ TOMBER" : `${player?.name?.toUpperCase()} VA TOMBER`}
+          {isMe ? "VOUS ÊTES TOMBÉ" : `${player?.name?.toUpperCase()} EST TOMBÉ`}
         </motion.h3>
       </motion.div>
+
+      {survivors.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.8 }}
+          transition={{ delay: 2.8 }}
+          className="relative z-10 flex items-center gap-3 mt-2"
+        >
+          {survivors.map((p: any) => (
+            <CharacterPortrait key={p.id} seed={p.avatarSeed} size={34} />
+          ))}
+        </motion.div>
+      )}
     </div>
   );
 }
@@ -787,29 +905,67 @@ function TransitionPhase({ state }: { state: any }) {
 function FinaleIntro({ state }: { state: any }) {
   const finalists = state.finale?.players.map((id: string) => state.players.find((p: any) => p.id === id));
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-10 px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4 relative overflow-hidden">
+      {/* dramatic split lighting */}
+      <motion.div
+        className="fixed inset-y-0 left-0 w-1/2 bg-gradient-to-r from-blood/15 to-transparent pointer-events-none"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1 }}
+      />
+      <motion.div
+        className="fixed inset-y-0 right-0 w-1/2 bg-gradient-to-l from-gold/10 to-transparent pointer-events-none"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1 }}
+      />
+
       <motion.h2
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="font-display text-5xl md:text-6xl text-gold uppercase"
+        className="relative font-display text-5xl md:text-6xl text-gold uppercase tracking-widest"
         style={{ textShadow: "0 0 50px rgba(212,175,55,0.6)" }}
       >
         LA FINALE
       </motion.h2>
-      <div className="flex items-center gap-8">
+
+      <div className="relative flex items-center gap-4 md:gap-10">
         {finalists?.map((p: any, i: number) => (
-          <motion.div
-            key={p?.id}
-            initial={{ x: i === 0 ? -100 : 100, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.7, ease: "backOut" }}
-            className="flex flex-col items-center gap-3"
-          >
-            <Avatar seed={p?.avatarSeed} name={p?.name || "?"} size={110} />
-            <span className="font-display text-2xl text-white uppercase">{p?.name}</span>
-          </motion.div>
+          <>
+            <motion.div
+              key={p?.id}
+              initial={{ x: i === 0 ? -140 : 140, opacity: 0, rotate: i === 0 ? -6 : 6 }}
+              animate={{ x: 0, opacity: 1, rotate: 0 }}
+              transition={{ delay: 0.4, duration: 0.8, ease: "backOut" }}
+              className="flex flex-col items-center gap-3"
+            >
+              <CharacterPortrait seed={p?.avatarSeed} size={120} glow />
+              <span className="font-display text-xl md:text-2xl text-white uppercase">{p?.name}</span>
+            </motion.div>
+            {i === 0 && (
+              <motion.span
+                key="vs"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: [0, 1.3, 1], opacity: 1 }}
+                transition={{ delay: 1.1, duration: 0.6 }}
+                className="font-display text-4xl md:text-5xl text-blood"
+                style={{ textShadow: "0 0 40px rgba(227,18,47,0.8)" }}
+              >
+                VS
+              </motion.span>
+            )}
+          </>
         ))}
       </div>
+
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 2.4 }}
+        className="relative text-steel text-xs uppercase tracking-[0.3em] mt-4"
+      >
+        La finale commence
+      </motion.p>
     </div>
   );
 }
@@ -828,7 +984,7 @@ function FinalePhase({ state, socket }: { state: any; socket: any }) {
       <div className="flex items-center justify-center gap-6">
         {finalists?.map((p: any) => (
           <div key={p?.id} className="flex flex-col items-center gap-1">
-            <Avatar seed={p?.avatarSeed} name={p?.name || "?"} size={56} />
+            <CharacterPortrait seed={p?.avatarSeed} size={56} />
             <span className="text-sm font-semibold text-white">{p?.name}</span>
             <span className="font-display text-3xl text-gold">{state.finale?.scores[p?.id] ?? 0}</span>
           </div>
@@ -902,7 +1058,7 @@ function VictoryPhase({ state }: { state: any }) {
         className="flex flex-col items-center gap-4"
       >
         <div className="text-6xl">🏆</div>
-        <Avatar seed={winner?.avatarSeed} name={winner?.name || "?"} size={120} />
+        <CharacterPortrait seed={winner?.avatarSeed} size={120} />
         <h2
           className="font-display text-5xl md:text-7xl text-gold uppercase"
           style={{ textShadow: "0 0 60px rgba(212,175,55,0.7)" }}

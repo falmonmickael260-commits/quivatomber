@@ -23,6 +23,8 @@ interface SoundCtx {
   play: (name: SoundName) => void;
   muted: boolean;
   toggleMute: () => void;
+  startTension: () => void;
+  stopTension: () => void;
 }
 
 const Ctx = createContext<SoundCtx | null>(null);
@@ -169,7 +171,60 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
     });
   }
 
-  const value = useMemo(() => ({ play, muted, toggleMute }), [muted]);
+  // Rising tension pad used during VOTE / REVEAL: a low drone whose pitch and
+  // volume creep upward over ~20s, giving the suspense beats somewhere to
+  // land without needing streamed audio files.
+  const tensionRef = useRef<{ osc: OscillatorNode; lfo: OscillatorNode; gain: GainNode; stop: () => void } | null>(
+    null
+  );
+
+  function startTension() {
+    if (muted || tensionRef.current) return;
+    try {
+      const ac = getCtx();
+      const osc = ac.createOscillator();
+      const lfo = ac.createOscillator();
+      const lfoGain = ac.createGain();
+      const gain = ac.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(70, ac.currentTime);
+      osc.frequency.linearRampToValueAtTime(110, ac.currentTime + 20);
+      lfo.frequency.value = 5.5;
+      lfoGain.gain.value = 6;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      gain.gain.setValueAtTime(0.0001, ac.currentTime);
+      gain.gain.linearRampToValueAtTime(0.05, ac.currentTime + 1.2);
+      gain.gain.linearRampToValueAtTime(0.1, ac.currentTime + 20);
+      osc.connect(gain);
+      gain.connect(ac.destination);
+      osc.start();
+      lfo.start();
+      const stop = () => {
+        try {
+          const t = ac.currentTime;
+          gain.gain.cancelScheduledValues(t);
+          gain.gain.setValueAtTime(gain.gain.value, t);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+          osc.stop(t + 0.45);
+          lfo.stop(t + 0.45);
+        } catch {}
+      };
+      tensionRef.current = { osc, lfo, gain, stop };
+    } catch {}
+  }
+
+  function stopTension() {
+    tensionRef.current?.stop();
+    tensionRef.current = null;
+  }
+
+  useEffect(() => {
+    if (muted) stopTension();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [muted]);
+
+  const value = useMemo(() => ({ play, muted, toggleMute, startTension, stopTension }), [muted]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

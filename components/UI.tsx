@@ -45,12 +45,14 @@ export function BigButton({
         onClick?.();
       }}
     >
+      {/* one-shot sheen on mount, not a looping animation — a real studio
+          button catches the light once, it doesn't strobe */}
       {variant === "primary" && (
         <motion.span
           className="absolute inset-0 bg-white/20"
           initial={{ x: "-120%" }}
           animate={{ x: "120%" }}
-          transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 1.6, ease: "easeInOut" }}
+          transition={{ duration: 1, delay: 0.3, ease: "easeInOut" }}
           style={{ skewX: -20 }}
         />
       )}
