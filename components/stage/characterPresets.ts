@@ -1,16 +1,18 @@
 /**
- * Apparence des candidats — dérivée de façon déterministe de l'`avatarSeed`
- * que le serveur attribue déjà à chaque joueur. Deux joueurs d'une même
- * partie ont donc des silhouettes distinctes, et un joueur garde la sienne
- * d'une manche à l'autre et après reconnexion, sans rien stocker de plus.
+ * Apparence des candidats.
  *
- * Les personnages sont construits en 3D à partir de primitives (voir
- * Character3D) : pas de modèle à télécharger, pas de texture — c'est ce qui
- * permet d'avoir huit candidats en pied sans alourdir la page.
+ * Reprise du système de personnages du dépôt sœur `QuizzMaster`
+ * (`shared/characters.ts`) : mêmes palettes, mêmes coiffures, mêmes
+ * accessoires, pour que les candidats des deux jeux soient de la même
+ * famille. L'adaptation ici : au lieu d'un identifiant de personnage
+ * choisi par le joueur, l'apparence est dérivée de façon déterministe de
+ * l'`avatarSeed` que le serveur attribue déjà à chaque joueur — elle est
+ * donc stable d'une manche à l'autre et après reconnexion, sans rien
+ * stocker de plus.
  */
 
-export type HairStyle = "short" | "spiky" | "long" | "ponytail" | "bun" | "buzz" | "afro" | "bob";
-export type Accessory = "none" | "glasses" | "cap" | "headband";
+export type HairStyle = "short" | "spiky" | "long" | "ponytail" | "curly" | "bun" | "buzz" | "afro" | "bob";
+export type Accessory = "none" | "cap" | "glasses" | "beanie" | "headphones" | "roundGlasses" | "headband";
 
 export interface CharacterPreset {
   skin: string;
@@ -18,29 +20,32 @@ export interface CharacterPreset {
   hairStyle: HairStyle;
   outfit: string;
   outfitAccent: string;
-  trousers: string;
   accessory: Accessory;
   accessoryColor: string;
   eyes: string;
-  build: number; // 0 = fine, 1 = large
-  height: number; // facteur de taille
 }
 
-const SKIN = ["#fbe0cc", "#f5d0b5", "#f2c7a5", "#e9b98f", "#d6a07a", "#c68a62", "#8d5a3b", "#6b4029"];
-const HAIR = ["#0d0d12", "#1b1210", "#3b2416", "#7a2e1b", "#c9632d", "#e8c26a", "#d9d4c7", "#4a3322"];
-// Tenues sobres : sur un plateau sombre, les candidats doivent se détacher
-// par la lumière, pas par des couleurs criardes.
-const OUTFIT = [
-  "#7d1326", "#1f3356", "#2d2a3e", "#123a35", "#4a2338",
-  "#36404f", "#5a3418", "#1c2b4a", "#43203a", "#2b3b2a",
+export const SKIN_TONES = ["#fbe0cc", "#f5d0b5", "#f2c7a5", "#e9b98f", "#d6a07a", "#c68a62", "#8d5a3b", "#6b4029"];
+export const HAIR_COLORS = ["#0d0d12", "#1b1210", "#3b2416", "#7a2e1b", "#c9632d", "#e8c26a", "#d9d4c7", "#ff66c4", "#29e7ff", "#9b5de5"];
+export const OUTFIT_COLORS = ["#ff4d6d", "#1fb6ff", "#ffd23f", "#2ee59d", "#9b5de5", "#ff7a1c", "#ff66c4", "#3a86ff", "#00c2a8", "#e63946", "#7b2cbf", "#222831"];
+export const OUTFIT_ACCENTS = ["#ffe3e8", "#0a2540", "#2a1a00", "#0b3326", "#f3e8ff", "#fff1e0", "#ffffff", "#e6f0ff", "#e0fffa", "#ffffff", "#ffd6ff", "#29e7ff"];
+export const ACCESSORY_COLORS = ["#ffffff", "#16161a", "#ff3b5c", "#29e7ff", "#ff9f1c", "#c9a227", "#2ee59d", "#9b5de5"];
+export const EYE_COLORS = ["#3d6b3a", "#2b1a10", "#3f6fa8", "#23150c", "#4a3020", "#40613a", "#5a7fa0"];
+export const HAIR_STYLES: HairStyle[] = ["short", "spiky", "long", "ponytail", "curly", "bun", "buzz", "afro", "bob"];
+// « none » pèse plus lourd : tous les candidats n'ont pas un accessoire.
+export const ACCESSORIES: Accessory[] = [
+  "none",
+  "none",
+  "none",
+  "glasses",
+  "cap",
+  "headband",
+  "roundGlasses",
+  "beanie",
+  "headphones",
 ];
-const TROUSERS = ["#14161f", "#1a1d28", "#101219", "#22252f"];
-const EYES = ["#3d6b3a", "#2b1a10", "#3f6fa8", "#4a3020", "#23150c"];
-const HAIR_STYLES: HairStyle[] = ["short", "spiky", "long", "ponytail", "bun", "buzz", "afro", "bob"];
-const ACCESSORIES: Accessory[] = ["none", "none", "none", "glasses", "cap", "headband"];
-const ACCESSORY_COLORS = ["#16161a", "#c9a227", "#7d1326", "#36404f"];
 
-/** Générateur déterministe simple : même graine, même apparence. */
+/** Générateur déterministe : même graine, même apparence. */
 function rng(seed: number) {
   let s = (Math.abs(Math.trunc(seed)) || 1) >>> 0;
   return () => {
@@ -55,27 +60,15 @@ function pick<T>(r: () => number, arr: T[]): T {
 
 export function presetFromSeed(seed: number): CharacterPreset {
   const r = rng(seed);
-  const skin = pick(r, SKIN);
-  const hair = pick(r, HAIR);
-  const hairStyle = pick(r, HAIR_STYLES);
-  const outfit = pick(r, OUTFIT);
-  const trousers = pick(r, TROUSERS);
-  const accessory = pick(r, ACCESSORIES);
-  const accessoryColor = pick(r, ACCESSORY_COLORS);
-  const eyes = pick(r, EYES);
-  const build = 0.25 + r() * 0.75;
-  const height = 0.94 + r() * 0.14;
+  const outfitIndex = Math.floor(r() * OUTFIT_COLORS.length) % OUTFIT_COLORS.length;
   return {
-    skin,
-    hair,
-    hairStyle,
-    outfit,
-    outfitAccent: "#e9e4d8",
-    trousers,
-    accessory,
-    accessoryColor,
-    eyes,
-    build,
-    height,
+    skin: pick(r, SKIN_TONES),
+    hair: pick(r, HAIR_COLORS),
+    hairStyle: pick(r, HAIR_STYLES),
+    outfit: OUTFIT_COLORS[outfitIndex],
+    outfitAccent: OUTFIT_ACCENTS[outfitIndex],
+    accessory: pick(r, ACCESSORIES),
+    accessoryColor: pick(r, ACCESSORY_COLORS),
+    eyes: pick(r, EYE_COLORS),
   };
 }

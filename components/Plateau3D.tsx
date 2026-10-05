@@ -165,7 +165,7 @@ function Seat({
       <Podium seat={player.seat ?? index + 1} name={player.name} active={active} offline={player.connected === false} />
       {/* le candidat se tient derrière son pupitre */}
       <group position={[0, 0, -0.46]}>
-        <Character3D seed={player.avatarSeed} mood={mood} lit={active} />
+        <Character3D seed={player.avatarSeed} mood={mood} />
       </group>
     </group>
   );
@@ -289,8 +289,10 @@ function CameraRig({
     const fz = focus ? focus[2] : 0;
 
     if (compact) {
-      want.current.set(fx * 0.5, 1.72, fz + 4.5);
-      look.current.set(fx * 0.72, 1.3, fz - 0.2);
+      // on recentre franchement sur le candidat éclairé : sur un écran
+      // étroit, le voir de trois quarts au bord ne vaut rien
+      want.current.set(fx * 0.88, 1.72, fz + 4.4);
+      look.current.set(fx * 0.98, 1.28, fz - 0.25);
     } else {
       want.current.set(0, 1.78 + total * 0.022, 6.5 + Math.max(0, total - 4) * 0.56);
       look.current.set(0, 1.24, 0.85);
