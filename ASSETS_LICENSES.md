@@ -1,64 +1,52 @@
 # Licences des assets — QUI VA TOMBER ?
 
-## Décision sur les portraits de personnages
+## Portraits de personnages
 
-La mission demandait des personnages "réalistes" sourcés sur des bibliothèques
-libres de droits (CC0, domaine public, etc.), avec interdiction explicite de :
+**Source : pack "Universal Base Characters" de Quaternius, licence CC0
+(domaine public).** Quaternius publie l'intégralité de ses modèles 3D en
+CC0 : utilisation libre, y compris commerciale, modification autorisée,
+aucune attribution requise. Page officielle du pack :
+https://quaternius.itch.io/universal-base-characters
 
-- récupérer des photos de **personnes réelles** (risque de droit à l'image),
-- récupérer des **personnages protégés** (séries, films, jeux),
-- utiliser un asset dont la licence n'est pas clairement vérifiable.
+21 portraits (rendus statiques 256×256 des modèles 3D, fond sombre)
+couvrant 10 silhouettes féminines et 11 masculines, tenues variées
+(aventurier, soldat, costume, sorcière, roi, combinaison spatiale,
+fermier, punk, plage, etc.) — assez de variété pour que chaque candidat
+d'une partie à 8 joueurs soit instantanément reconnaissable.
 
-Après évaluation des sources usuelles (Unsplash, Pexels, Pixabay, OpenGameArt,
-Sketchfab…), aucune ne permet de remplir **simultanément** les trois
-contraintes ci-dessus avec une garantie fiable :
+Fichiers : `public/characters/*.png` — intégrés dans
+[components/CharacterPortrait.tsx](components/CharacterPortrait.tsx), qui
+choisit un portrait par joueur à partir de son `avatarSeed` et ajoute un
+cadrage, un léger halo lumineux (couleur du plateau) et un contour — mise
+en scène uniquement, les images elles-mêmes ne sont pas modifiées.
 
-- les portraits "réalistes" de qualité sur ces plateformes sont presque
-  toujours des **photographies de vraies personnes** (modèles ayant cédé
-  leurs droits pour un usage stock — pas pour incarner un "personnage" dans
-  un jeu, ce qui est une utilisation différente et plus sensible) ;
-- les visages générés par IA disponibles publiquement n'ont pas de licence
-  vérifiable de façon fiable sans accès web complet au moment du contrôle ;
-- télécharger des binaires externes d'origine incertaine dans un dépôt de
-  code n'est pas une pratique sûre.
+**Chaîne de provenance** : ces fichiers ont été récupérés tels quels
+depuis le dépôt sœur `falmonmickael260-commits/QuizzMaster` (commits
+`651ece8`…`717c522`, "Modèles 3D CC0 Quaternius"), qui les a lui-même
+téléchargés automatiquement depuis la page itch.io officielle de
+Quaternius via un pipeline versionné
+(`.github/workflows/assets.yml` de ce dépôt sœur, action "Téléchargement
+gratuit itch.io"). Rien n'a été pris sur une source tierce non vérifiée.
 
-**Décision retenue : aucun asset visuel externe.** Les 8 "personnages" du jeu
-([components/CharacterPortrait.tsx](components/CharacterPortrait.tsx)) sont
-des illustrations vectorielles **entièrement originales**, créées pour ce
-projet, sous forme de silhouettes stylisées "plateau TV" (éclairage de
-studio, contre-jour, pas de visage dessiné pour éviter tout effet "mauvaise
-IA" ou cartoon). Zéro dépendance externe, zéro risque de licence, zéro poids
-réseau supplémentaire (SVG généré en code).
+Ce choix répondait à la contrainte initiale (personnages réalistes, sans
+vraie personne identifiable, sans personnage protégé, licence vérifiable) :
+voir l'historique de ce fichier pour la première version de ce projet, où
+cette contrainte avait conduit à des silhouettes 100% originales en
+l'absence d'une source externe fiable alors identifiée — remplacées ici par
+ces portraits CC0 une fois la source confirmée.
 
-Aucun autre asset binaire (image, police, son) n'est utilisé dans ce projet :
+## Autres assets
 
-- les polices (`Bebas Neue`, `Oswald`, `Inter`) sont chargées via Google
-  Fonts (service géré par Google, polices sous licence Open Font License,
-  usage web standard et gratuit) ;
-- tous les effets sonores sont **générés en direct par code** via l'API Web
-  Audio (`hooks/useSound.tsx`) — aucun fichier `.mp3`/`.wav` n'est embarqué.
-
-## Pour aller plus loin en production
-
-Si une identité visuelle plus photoréaliste est souhaitée pour un lancement
-réel, les options les plus sûres sont, par ordre de préférence :
-
-1. **Commander des illustrations originales** à un·e illustrateur·rice
-   (aucun risque de licence, identité visuelle propre à la marque).
-2. **Générer des portraits via un outil d'IA générative** sous contrat
-   explicite autorisant l'usage commercial (ex. offres entreprise de
-   générateurs d'images), en conservant la preuve de licence.
-3. Utiliser un service d'avatars paramétriques largement adopté et
-   clairement licencié (ex. DiceBear, licence MIT pour le moteur ; vérifier
-   la licence propre à chaque style d'illustration avant intégration).
-
-Dans tous les cas : consigner dans ce fichier la source, l'auteur, l'URL, la
-licence exacte et les conditions d'usage avant tout ajout.
+- **Polices** (`Bebas Neue`, `Oswald`, `Inter`) : chargées via Google
+  Fonts, licence Open Font License, usage web standard et gratuit.
+- **Effets sonores** : générés en direct par code via l'API Web Audio
+  (`hooks/useSound.tsx`) — aucun fichier `.mp3`/`.wav` embarqué, donc
+  aucune question de licence sur ce point.
 
 ## Journal des assets
 
 | Asset | Source | Auteur | Licence | Usage | Emplacement |
 |---|---|---|---|---|---|
-| Portraits de personnages (8 archétypes) | Création originale pour ce projet | Équipe QUI VA TOMBER ? | Propriété du projet | Avatars des joueurs | `components/CharacterPortrait.tsx` |
+| 21 portraits de personnages | Quaternius — pack "Universal Base Characters" (via le pipeline du dépôt `QuizzMaster`) | Quaternius | CC0 (domaine public) | Avatars des joueurs | `public/characters/*.png`, `components/CharacterPortrait.tsx` |
 | Polices Bebas Neue / Oswald / Inter | Google Fonts | Voir Google Fonts | Open Font License | Typographie du jeu | `styles/globals.css` (import) |
 | Effets sonores | Générés par code (oscillateurs Web Audio) | Équipe QUI VA TOMBER ? | Propriété du projet | Sound design | `hooks/useSound.tsx` |
