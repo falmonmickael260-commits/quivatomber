@@ -3,6 +3,8 @@ import { useRouter } from "next/router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Background } from "@/components/Background";
 import { StudioBackdrop } from "@/components/StudioBackdrop";
+import { Stage3D } from "@/components/Stage3D";
+import { WebGLGuard, hasWebGL } from "@/components/WebGLGuard";
 import { MuteButton, BigButton, Panel } from "@/components/UI";
 import { CharacterPortrait } from "@/components/CharacterPortrait";
 import { AnimatedAmount, formatEuro } from "@/components/AnimatedAmount";
@@ -132,10 +134,24 @@ export default function GamePage() {
     );
   }
 
+  const activeRoster = state.players.filter((p: any) => !p.eliminated);
+  const stageActiveIndex = activeRoster.findIndex((p: any) => p.id === state.currentTurnPlayerId);
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       <Background intensity={state.phase === "ELIMINATION" || state.phase === "REVEAL" ? 1.3 : 0.6} />
-      {["ROUND_PLAY", "VOTE", "REVEAL", "TIEBREAK", "ELIMINATION", "ROUND_TRANSITION"].includes(state.phase) && (
+      {(state.phase === "ROUND_PLAY" || state.phase === "FINALE") && (
+        <div className="hidden lg:block">
+          {hasWebGL() ? (
+            <WebGLGuard fallback={<StudioBackdrop />}>
+              <Stage3D activeIndex={stageActiveIndex} playerCount={Math.max(activeRoster.length, 1)} />
+            </WebGLGuard>
+          ) : (
+            <StudioBackdrop />
+          )}
+        </div>
+      )}
+      {["VOTE", "REVEAL", "TIEBREAK", "ELIMINATION", "ROUND_TRANSITION"].includes(state.phase) && (
         <div className="hidden lg:block">
           <StudioBackdrop />
         </div>
