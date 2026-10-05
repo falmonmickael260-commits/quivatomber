@@ -32,23 +32,43 @@ export type PlateauPlayer3D = {
 };
 
 /* ─── placement des sièges sur l'arc ────────────────────────────────── */
-const ARC_RADIUS = 7.4;
+const ARC_RADIUS = 10.4;
+/** Décalage du candidat derrière sa borne. */
+const CHARACTER_Z = -0.62;
 
 function seatTransform(index: number, total: number) {
   // Demi-angle de l'arc : il s'ouvre avec le nombre de candidats, mais reste
   // borné pour que les huit bornes tiennent dans le cadre sans déborder.
-  const spread = Math.min(0.64, 0.16 + total * 0.06);
+  const spread = Math.min(0.68, 0.17 + total * 0.064);
   const t = total > 1 ? index / (total - 1) : 0.5;
   const angle = -spread + t * spread * 2;
+  const x = Math.sin(angle) * ARC_RADIUS;
+  const z = ARC_RADIUS - Math.cos(angle) * ARC_RADIUS;
+  const rotationY = -angle;
+
+  // Le candidat se tient en retrait de sa borne : c'est lui que le
+  // projecteur doit éclairer, pas le milieu de l'emplacement. On ramène
+  // donc sa position locale (0, 0, CHARACTER_Z) en coordonnées monde.
+  const characterPos: [number, number, number] = [
+    x + CHARACTER_Z * Math.sin(rotationY),
+    0,
+    z + CHARACTER_Z * Math.cos(rotationY),
+  ];
+
   return {
-    position: [Math.sin(angle) * ARC_RADIUS, 0, ARC_RADIUS - Math.cos(angle) * ARC_RADIUS] as [number, number, number],
-    rotationY: -angle,
+    position: [x, 0, z] as [number, number, number],
+    characterPos,
+    rotationY,
     angle,
   };
 }
 
 /* ─── pupitre ───────────────────────────────────────────────────────── */
-const PODIUM_H = 1.04;
+const PODIUM_W = 1.75;
+const PODIUM_H = 1.12;
+const PODIUM_D = 0.78;
+/** La borne est avancée : le candidat tient debout derrière. */
+const PODIUM_Z = 0.18;
 
 function Podium({
   seat,
@@ -90,57 +110,63 @@ function Podium({
     <group>
       {/* anneau lumineux au sol */}
       <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]} material={ledMat}>
-        <ringGeometry args={[0.86, 0.96, 48]} />
+        <ringGeometry args={[1.42, 1.56, 56]} />
       </mesh>
 
-      {/* socle, un peu plus large que le fût : le pupitre pose sur le sol */}
-      <RoundedBox args={[1.2, 0.09, 0.66]} radius={0.03} smoothness={2} position={[0, 0.045, 0]} material={bodyMat} />
-      {/* corps du pupitre */}
-      <RoundedBox args={[1.12, PODIUM_H, 0.58]} radius={0.05} smoothness={3} position={[0, PODIUM_H / 2, 0]} material={bodyMat} />
-      {/* plan de travail incliné, liseré métal */}
-      <mesh position={[0, PODIUM_H + 0.03, 0.03]} rotation={[-0.2, 0, 0]}>
-        <boxGeometry args={[1.18, 0.06, 0.64]} />
-        <primitive object={trimMat} attach="material" />
-      </mesh>
-      {/* arête supérieure claire : accroche la lumière et détache la borne */}
-      <mesh position={[0, PODIUM_H - 0.02, 0.295]}>
-        <boxGeometry args={[1.1, 0.02, 0.012]} />
-        <meshBasicMaterial color={active ? "#ff8a9c" : "#2e3a52"} toneMapped={false} />
-      </mesh>
-      {/* bandeau LED en façade */}
-      <mesh position={[0, 0.14, 0.286]} material={ledMat}>
-        <boxGeometry args={[0.92, 0.035, 0.012]} />
-      </mesh>
+      <group position={[0, 0, PODIUM_Z]}>
+        {/* socle */}
+        <RoundedBox args={[PODIUM_W + 0.14, 0.1, PODIUM_D + 0.12]} radius={0.03} smoothness={2} position={[0, 0.05, 0]} material={bodyMat} />
+        {/* fût */}
+        <RoundedBox args={[PODIUM_W, PODIUM_H, PODIUM_D]} radius={0.08} smoothness={3} position={[0, PODIUM_H / 2 + 0.04, 0]} material={bodyMat} />
+        {/* plan de travail */}
+        <mesh position={[0, PODIUM_H + 0.12, 0]}>
+          <boxGeometry args={[PODIUM_W + 0.11, 0.08, PODIUM_D + 0.12]} />
+          <primitive object={trimMat} attach="material" />
+        </mesh>
+        {/* bandeaux LED : pied et arête du plan de travail */}
+        <mesh position={[0, 0.14, PODIUM_D / 2 + 0.005]} material={ledMat}>
+          <boxGeometry args={[PODIUM_W - 0.16, 0.045, 0.02]} />
+        </mesh>
+        <mesh position={[0, PODIUM_H + 0.165, PODIUM_D / 2 + 0.055]} material={ledMat}>
+          <boxGeometry args={[PODIUM_W + 0.09, 0.03, 0.02]} />
+        </mesh>
 
-      {/* plaque numéro + pseudo, encastrée dans la façade */}
-      <mesh position={[0, PODIUM_H * 0.56, 0.284]}>
-        <planeGeometry args={[0.72, 0.46]} />
-        <meshStandardMaterial color={active ? "#2a0a12" : "#070b14"} roughness={0.35} metalness={0.4} />
-      </mesh>
-      <mesh position={[0, PODIUM_H * 0.66, 0.288]}>
-        <ringGeometry args={[0.165, 0.178, 36]} />
-        <meshBasicMaterial color={active ? RED : "#3a4a66"} toneMapped={false} />
-      </mesh>
-      <Text
-        position={[0, PODIUM_H * 0.66, 0.292]}
-        fontSize={0.2}
-        color={active ? "#ffffff" : "#8694b0"}
-        anchorX="center"
-        anchorY="middle"
-      >
-        {String(seat)}
-      </Text>
-      <Text
-        position={[0, PODIUM_H * 0.4, 0.292]}
-        fontSize={0.088}
-        maxWidth={0.68}
-        color={active ? "#ffd9df" : offline ? "#48506033" : "#73809a"}
-        anchorX="center"
-        anchorY="middle"
-        letterSpacing={0.06}
-      >
-        {name.toUpperCase()}
-      </Text>
+        {/* façade : numéro + pseudo, encastrés dans le pupitre */}
+        <mesh position={[0, PODIUM_H * 0.58, PODIUM_D / 2 + 0.004]}>
+          <planeGeometry args={[PODIUM_W - 0.2, PODIUM_H * 0.66]} />
+          <meshStandardMaterial color={active ? "#2a0a12" : "#070b14"} roughness={0.35} metalness={0.4} />
+        </mesh>
+        <mesh position={[0, PODIUM_H * 0.68, PODIUM_D / 2 + 0.008]}>
+          <ringGeometry args={[0.235, 0.252, 40]} />
+          <meshBasicMaterial color={active ? RED : "#3a4a66"} toneMapped={false} />
+        </mesh>
+        <Text
+          position={[0, PODIUM_H * 0.68, PODIUM_D / 2 + 0.012]}
+          fontSize={0.28}
+          color={active ? "#ffffff" : "#8694b0"}
+          anchorX="center"
+          anchorY="middle"
+        >
+          {String(seat)}
+        </Text>
+        <Text
+          position={[0, PODIUM_H * 0.3, PODIUM_D / 2 + 0.012]}
+          fontSize={0.145}
+          maxWidth={PODIUM_W - 0.3}
+          color={active ? "#ffd9df" : offline ? "#48506055" : "#73809a"}
+          anchorX="center"
+          anchorY="middle"
+          letterSpacing={0.06}
+        >
+          {name.toUpperCase()}
+        </Text>
+
+        {/* arête claire du plan de travail : accroche la lumière */}
+        <mesh position={[0, PODIUM_H + 0.157, PODIUM_D / 2 + 0.062]}>
+          <boxGeometry args={[PODIUM_W + 0.06, 0.016, 0.012]} />
+          <meshBasicMaterial color={active ? "#ff8a9c" : "#2e3a52"} toneMapped={false} />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -164,8 +190,8 @@ function Seat({
     <group position={position} rotation={[0, rotationY, 0]}>
       <Podium seat={player.seat ?? index + 1} name={player.name} active={active} offline={player.connected === false} />
       {/* le candidat se tient derrière son pupitre */}
-      <group position={[0, 0, -0.46]}>
-        <Character3D seed={player.avatarSeed} mood={mood} />
+      <group position={[0, 0, CHARACTER_Z]}>
+        <Character3D seat={player.seat ?? index + 1} seed={player.avatarSeed} mood={mood} />
       </group>
     </group>
   );
@@ -178,7 +204,7 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
   const cone = useRef<THREE.Mesh>(null);
   const pool = useRef<THREE.Mesh>(null);
   const current = useRef(new THREE.Vector3(0, 0, 0));
-  const head = useRef(new THREE.Vector3(0, 7.4, 2.2));
+  const head = useRef(new THREE.Vector3(0, 10.4, 3.1));
 
   const coneGeo = useMemo(() => {
     const g = new THREE.ConeGeometry(1, 1, 28, 1, true);
@@ -195,7 +221,7 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
 
     if (spot.current) {
       spot.current.position.copy(head.current);
-      spot.current.intensity += ((target ? 900 : 0) - spot.current.intensity) * k;
+      spot.current.intensity += ((target ? 1900 : 0) - spot.current.intensity) * k;
     }
     aim.current.position.copy(current.current);
     aim.current.updateMatrixWorld();
@@ -207,7 +233,7 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
       const dir = new THREE.Vector3().subVectors(to, from);
       const len = dir.length();
       cone.current.position.copy(from);
-      cone.current.scale.set(1.5, len, 1.5);
+      cone.current.scale.set(2.2, len, 2.2);
       cone.current.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir.clone().normalize());
       const m = cone.current.material as THREE.MeshBasicMaterial;
       m.opacity += ((target ? 0.075 : 0) - m.opacity) * k;
@@ -225,9 +251,9 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
       <spotLight
         ref={spot}
         target={aim.current}
-        angle={0.3}
+        angle={0.27}
         penumbra={0.75}
-        distance={22}
+        distance={32}
         decay={1.5}
         intensity={0}
         color="#fff3e2"
@@ -249,7 +275,7 @@ function MovingSpot({ target }: { target: [number, number, number] | null }) {
       </mesh>
       {/* flaque de lumière au sol */}
       <mesh ref={pool} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
-        <circleGeometry args={[1.5, 40]} />
+        <circleGeometry args={[2.2, 40]} />
         <meshBasicMaterial color="#ffe9cd" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </mesh>
     </>
@@ -291,11 +317,13 @@ function CameraRig({
     if (compact) {
       // on recentre franchement sur le candidat éclairé : sur un écran
       // étroit, le voir de trois quarts au bord ne vaut rien
-      want.current.set(fx * 0.88, 1.72, fz + 4.4);
-      look.current.set(fx * 0.98, 1.28, fz - 0.25);
+      // assez de recul pour tenir le candidat entier ET la plaque de sa
+      // borne dans un cadre de téléphone, qui est court en hauteur
+      want.current.set(fx * 0.85, 2.15, fz + 8.4);
+      look.current.set(fx * 0.95, 1.5, fz + 0.4);
     } else {
-      want.current.set(0, 1.78 + total * 0.022, 6.5 + Math.max(0, total - 4) * 0.56);
-      look.current.set(0, 1.24, 0.85);
+      want.current.set(0, 2.5 + total * 0.03, 9.2 + Math.max(0, total - 4) * 0.78);
+      look.current.set(0, 1.78, 1.2);
     }
 
     // premier rendu : on se place directement, sans glissement
@@ -315,28 +343,28 @@ function StudioSet() {
     for (let i = 0; i < 34; i++) {
       const a = -1.25 + (i / 33) * 2.5;
       if (Math.abs(a) < 0.3) continue; // dégage l'emplacement de l'enseigne
-      out.push({ a, h: 3.4 + ((i * 7) % 5) * 0.5, red: i % 5 === 0 });
+      out.push({ a, h: 4.8 + ((i * 7) % 5) * 0.7, red: i % 5 === 0 });
     }
     return out;
   }, []);
 
-  const WALL_R = 15;
+  const WALL_R = 21;
 
   return (
     <group>
       {/* mur de fond incurvé */}
-      <mesh position={[0, 4, 2]}>
-        <cylinderGeometry args={[WALL_R, WALL_R, 9, 64, 1, true, -1.45, 2.9]} />
+      <mesh position={[0, 5.6, 3]}>
+        <cylinderGeometry args={[WALL_R, WALL_R, 12.6, 64, 1, true, -1.45, 2.9]} />
         <meshStandardMaterial color="#070a13" roughness={0.78} metalness={0.25} side={THREE.BackSide} />
       </mesh>
 
       {/* lattes verticales sur le mur */}
       {slats.map((s, i) => {
-        const x = Math.sin(s.a) * (WALL_R - 0.18);
-        const z = 2 - Math.cos(s.a) * (WALL_R - 0.18);
+        const x = Math.sin(s.a) * (WALL_R - 0.25);
+        const z = 3 - Math.cos(s.a) * (WALL_R - 0.25);
         return (
-          <mesh key={i} position={[x, s.h / 2 + 0.4, z]} rotation={[0, -s.a, 0]}>
-            <boxGeometry args={[0.16, s.h, 0.06]} />
+          <mesh key={i} position={[x, s.h / 2 + 0.5, z]} rotation={[0, -s.a, 0]}>
+            <boxGeometry args={[0.22, s.h, 0.08]} />
             <meshStandardMaterial
               color={s.red ? "#2a0710" : "#10131f"}
               roughness={0.5}
@@ -349,40 +377,40 @@ function StudioSet() {
       })}
 
       {/* enseigne du plateau, rétroéclairée */}
-      <group position={[0, 5.2, 2 - WALL_R + 0.5]}>
+      <group position={[0, 7.3, 3 - WALL_R + 0.7]}>
         <mesh>
-          <planeGeometry args={[7, 2.6]} />
+          <planeGeometry args={[9.8, 3.7]} />
           <meshStandardMaterial color="#05070e" roughness={0.4} metalness={0.3} />
         </mesh>
         <mesh position={[0, 0, -0.02]}>
-          <planeGeometry args={[7.5, 3.1]} />
+          <planeGeometry args={[10.5, 4.4]} />
           <meshBasicMaterial color={RED} toneMapped={false} transparent opacity={0.1} />
         </mesh>
-        <Text position={[0, 0.52, 0.03]} fontSize={0.82} color="#f4f1ea" anchorX="center" anchorY="middle" letterSpacing={0.04}>
+        <Text position={[0, 0.74, 0.03]} fontSize={1.16} color="#f4f1ea" anchorX="center" anchorY="middle" letterSpacing={0.04}>
           QUI VA
         </Text>
-        <Text position={[0, -0.55, 0.03]} fontSize={1.0} color={RED} anchorX="center" anchorY="middle" letterSpacing={0.03}>
+        <Text position={[0, -0.78, 0.03]} fontSize={1.4} color={RED} anchorX="center" anchorY="middle" letterSpacing={0.03}>
           TOMBER ?
         </Text>
       </group>
 
       {/* rampe de projecteurs éteints au plafond : on sent le gril technique */}
-      {[-6, -3.6, -1.2, 1.2, 3.6, 6].map((x) => (
-        <group key={x} position={[x, 7.6, 1.5]}>
+      {[-8.4, -5, -1.7, 1.7, 5, 8.4].map((x) => (
+        <group key={x} position={[x, 10.6, 2]}>
           <mesh>
-            <cylinderGeometry args={[0.2, 0.26, 0.42, 12]} />
+            <cylinderGeometry args={[0.28, 0.36, 0.6, 12]} />
             <meshStandardMaterial color="#0d1019" roughness={0.5} metalness={0.7} />
           </mesh>
-          <mesh position={[0, -0.22, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[0.18, 16]} />
+          <mesh position={[0, -0.31, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.25, 16]} />
             <meshBasicMaterial color="#9fb0d8" toneMapped={false} />
           </mesh>
         </group>
       ))}
 
       {/* sol laqué réfléchissant */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 1]} receiveShadow>
-        <planeGeometry args={[46, 34]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 1.5]} receiveShadow>
+        <planeGeometry args={[64, 48]} />
         <MeshReflectorMaterial
           resolution={512}
           blur={[400, 120]}
@@ -399,9 +427,9 @@ function StudioSet() {
       </mesh>
 
       {/* arcs rouges incrustés dans le sol */}
-      {[6.6, 9.4, 12.6].map((r, i) => (
-        <mesh key={r} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.008, 2]}>
-          <ringGeometry args={[r, r + 0.055, 96, 1, Math.PI * 0.08, Math.PI * 0.84]} />
+      {[9.2, 13.2, 17.6].map((r, i) => (
+        <mesh key={r} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.008, 2.8]}>
+          <ringGeometry args={[r, r + 0.08, 96, 1, Math.PI * 0.08, Math.PI * 0.84]} />
           <meshBasicMaterial color={RED} toneMapped={false} transparent opacity={0.4 - i * 0.1} />
         </mesh>
       ))}
@@ -423,13 +451,12 @@ function Scene({
 }) {
   const total = Math.max(players.length, 1);
   const activeIndex = players.findIndex((p) => p.id === activeId);
-  const target =
-    activeIndex >= 0 ? seatTransform(activeIndex, total).position : null;
+  const target = activeIndex >= 0 ? seatTransform(activeIndex, total).characterPos : null;
 
   return (
     <>
       <color attach="background" args={["#03040a"]} />
-      <fog attach="fog" args={["#03040a", 14, 34]} />
+      <fog attach="fog" args={["#03040a", 20, 50]} />
 
       {/* Éclairage d'ensemble très faible : le plateau doit être sombre.
           Juste de quoi deviner les candidats qui ne jouent pas. */}
@@ -437,10 +464,10 @@ function Scene({
       <hemisphereLight args={["#32405f", "#020306", 0.6]} />
       {/* nappe frontale très douce : évite que les visages non éclairés
           tombent dans le noir absolu */}
-      <directionalLight position={[0, 4.5, 9]} intensity={0.34} color="#9fb2d8" />
+      <directionalLight position={[0, 6.5, 13]} intensity={0.34} color="#9fb2d8" />
       {/* deux touches de contre-jour fixes, pour détacher les silhouettes */}
-      <pointLight position={[-11, 5, -2]} intensity={34} distance={28} decay={2} color={RED} />
-      <pointLight position={[11, 5, -2]} intensity={22} distance={28} decay={2} color="#4b6ea8" />
+      <pointLight position={[-15, 7, -3]} intensity={70} distance={40} decay={2} color={RED} />
+      <pointLight position={[15, 7, -3]} intensity={46} distance={40} decay={2} color="#4b6ea8" />
 
       <CameraRig total={total} compact={compact} focus={target} />
       <StudioSet />
@@ -482,7 +509,7 @@ export function Plateau3D({
         // apporte à cette taille.
         dpr={compact ? [1, 1.4] : [1, 1.75]}
         shadows={!compact}
-        camera={{ position: [0, 1.95, 8.6], fov: compact ? 40 : 36 }}
+        camera={{ position: [0, 2.7, 12.3], fov: compact ? 40 : 36 }}
         gl={{ antialias: true, powerPreference: "high-performance" }}
       >
         <Suspense fallback={null}>

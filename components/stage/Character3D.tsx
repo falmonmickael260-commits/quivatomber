@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { CharacterPreset } from "./characterPresets";
-import { presetFromSeed } from "./characterPresets";
+import { presetForSeat } from "./characterPresets";
 
 /**
  * Candidat 3D en pied.
@@ -92,13 +92,18 @@ function targetPose(mood: CharacterMood, t: number, seed: number): Pose {
 
 type Mats = Record<string, THREE.Material>;
 
-/** Hauteur du squelette ci-dessous, du sol au sommet du crâne. */
-const RAW_HEIGHT = 2.78;
-/** Hauteur voulue sur ce plateau (1 unité = 1 m, borne à 1,04 m). */
-const TARGET_HEIGHT = 1.9;
-
-export function Character3D({ seed, mood = "idle" }: { seed: number; mood?: CharacterMood }) {
-  const preset = useMemo(() => presetFromSeed(seed), [seed]);
+export function Character3D({
+  seat,
+  seed = 0,
+  mood = "idle",
+}: {
+  /** Numéro de borne : il détermine lequel des douze personnages monte ici. */
+  seat?: number;
+  /** Décale les animations pour que les candidats ne respirent pas en choeur. */
+  seed?: number;
+  mood?: CharacterMood;
+}) {
+  const preset = useMemo(() => presetForSeat(seat), [seat]);
   const n = useMemo(() => (Math.abs(Math.trunc(seed)) % 997) / 97, [seed]);
 
   const root = useRef<THREE.Group>(null);
@@ -197,7 +202,9 @@ export function Character3D({ seed, mood = "idle" }: { seed: number; mood?: Char
   });
 
   return (
-    <group ref={root} scale={TARGET_HEIGHT / RAW_HEIGHT}>
+    // Échelle laissée telle quelle (≈2,78 du sol au crâne) : c'est elle
+    // qui donne le bon rapport avec la borne, qui arrive à la taille.
+    <group ref={root}>
       <group ref={body}>
         {/* jambes — masquées par la borne de face, visibles de trois quarts */}
         {[-0.16, 0.16].map((x) => (

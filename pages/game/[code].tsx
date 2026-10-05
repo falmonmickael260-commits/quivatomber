@@ -614,7 +614,7 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
         </div>
 
         {/* --- HUD : coin haut gauche --- */}
-        <div className="absolute top-2 left-2 md:top-5 md:left-5 z-20">
+        <div className={`absolute left-2 md:left-5 z-20 ${state.isSpectator ? "top-10 md:top-12" : "top-2 md:top-5"}`}>
           <HudPanel label="Cagnotte" tone="red">
             <AnimatedAmount
               value={state.totalBankedAllPlayers}
@@ -624,8 +624,9 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
         </div>
 
         {/* --- HUD : coin haut droit --- */}
-        {/* décalé à droite pour ne pas passer sous le bouton son (fixe) */}
-        <div className="absolute top-2 right-16 md:top-5 md:right-20 z-20">
+        {/* décalé à droite pour ne pas passer sous le bouton son (fixe), et
+            vers le bas quand le bandeau spectateur occupe le haut de l'écran */}
+        <div className={`absolute right-16 md:right-20 z-20 ${state.isSpectator ? "top-10 md:top-12" : "top-2 md:top-5"}`}>
           <HudPanel label="Temps restant" tone="red">
             <p className="font-display text-lg md:text-3xl text-white leading-none tabular-nums">
               {String(roundMin).padStart(2, "0")}:{String(roundSec).padStart(2, "0")}
