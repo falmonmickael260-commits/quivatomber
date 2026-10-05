@@ -42,20 +42,35 @@ export function getArchetypeIndex(seed: number) {
   return n % PORTRAITS.length;
 }
 
+/** Raw asset path for a seed — used by the plateau, which renders the bust
+ *  full-frame (masked into the dark set) rather than cropped into a disc. */
+export function getPortraitSrc(seed: number) {
+  return `/characters/${PORTRAITS[getArchetypeIndex(seed)]}.png`;
+}
+
+/** Per-archetype accent, reused by the plateau for the podium nameplate. */
+export function getPortraitAccent(seed: number) {
+  return ACCENTS[getArchetypeIndex(seed) % ACCENTS.length];
+}
+
 export function CharacterPortrait({
   seed,
+  character,
   size = 96,
   glow = false,
   grayscale = false,
   className = "",
 }: {
   seed: number;
+  /** Index d'apparence attribué par le serveur : quand il est fourni, le
+   *  portrait montre exactement le personnage qui montera sur le plateau. */
+  character?: number;
   size?: number;
   glow?: boolean;
   grayscale?: boolean;
   className?: string;
 }) {
-  const idx = getArchetypeIndex(seed);
+  const idx = character !== undefined && character !== null ? character % PORTRAITS.length : getArchetypeIndex(seed);
   const file = PORTRAITS[idx];
   const accent = ACCENTS[idx % ACCENTS.length];
 

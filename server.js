@@ -41,6 +41,11 @@ app.prepare().then(() => {
       socket.join(`player:${result.player.id}`);
       socket.join(`room:${result.room.code}`);
       cb?.({ ok: true, code: result.room.code, playerId: result.player.id, token: result.token });
+      // engine.joinRoom a déjà diffusé l'état, mais ce socket n'avait pas
+      // encore rejoint sa room `player:` — sans ce renvoi, le dernier
+      // arrivant reste sans état jusqu'à la prochaine action d'un autre
+      // joueur (écran de chargement bloqué).
+      socket.emit("state", engine.getStateFor(result.room, result.player.id));
     });
 
     socket.on("reconnect_room", ({ code, playerId, token }, cb) => {
@@ -51,6 +56,9 @@ app.prepare().then(() => {
       socket.join(`player:${playerId}`);
       socket.join(`room:${result.room.code}`);
       cb?.({ ok: true });
+      // même raison que pour join_room : la diffusion faite par l'engine
+      // est partie avant que ce socket ne rejoigne sa room.
+      socket.emit("state", engine.getStateFor(result.room, playerId));
     });
 
     socket.on("toggle_ready", () => {
