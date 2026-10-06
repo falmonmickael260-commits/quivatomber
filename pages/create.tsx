@@ -5,6 +5,7 @@ import { Background } from "@/components/Background";
 import { BigButton, Panel, MuteButton } from "@/components/UI";
 import { useSocket } from "@/hooks/useSocket";
 import { saveSession } from "@/lib/session";
+import { CharacterPicker, randomCharacter } from "@/components/CharacterPicker";
 
 export default function Create() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export default function Create() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [roundDuration, setRoundDuration] = useState(120);
   const [difficulty, setDifficulty] = useState("mixte");
+  const [character, setCharacter] = useState(randomCharacter);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,7 +27,7 @@ export default function Create() {
     setError("");
     socket.emit(
       "create_room",
-      { name: name.trim(), settings: { maxPlayers, roundDuration, difficulty } },
+      { name: name.trim(), settings: { maxPlayers, roundDuration, difficulty, character } },
       (res: any) => {
         setLoading(false);
         if (!res?.ok) {
@@ -47,7 +49,7 @@ export default function Create() {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="relative z-10 w-full max-w-md"
+        className="relative z-10 w-full max-w-lg"
       >
         <h1 className="font-display text-4xl text-center mb-1 text-white uppercase">
           Créer une <span className="text-blood">partie</span>
@@ -64,6 +66,11 @@ export default function Create() {
               placeholder="Ex: Alex"
               className="w-full bg-black/40 border border-white/15 rounded-lg px-4 py-3 text-white outline-none focus:border-blood transition"
             />
+          </div>
+
+          <div>
+            <label className="text-xs uppercase tracking-widest text-steel mb-2 block">Votre personnage</label>
+            <CharacterPicker value={character} onChange={setCharacter} />
           </div>
 
           <div>

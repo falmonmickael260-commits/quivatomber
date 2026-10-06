@@ -17,11 +17,17 @@ const Plateau3D = dynamic(() => import("@/components/Plateau3D").then((m) => m.P
 });
 import { MuteButton, BigButton, Panel } from "@/components/UI";
 import { CharacterPortrait } from "@/components/CharacterPortrait";
+import { CharacterPicker } from "@/components/CharacterPicker";
 import { AnimatedAmount, formatEuro } from "@/components/AnimatedAmount";
 import { Logo } from "@/components/Logo";
 import { useSocket } from "@/hooks/useSocket";
 import { useSound } from "@/hooks/useSound";
 import { loadSession, saveSession, clearSession } from "@/lib/session";
+
+/** Hauteur du plateau : partagée par la couche 3D et l'espace que la manche
+ *  lui réserve dans son flux, pour qu'ils restent alignés au pixel. */
+const STAGE_HEIGHT_DESKTOP = "clamp(320px, 52vh, 640px)";
+const STAGE_HEIGHT_MOBILE = "clamp(230px, 34vh, 330px)";
 
 function useCountdown(deadline: number | null) {
   const [remaining, setRemaining] = useState(0);
@@ -144,6 +150,8 @@ export default function GamePage() {
     );
   }
 
+  const onStage = state.phase === "ROUND_PLAY" || state.phase === "FINALE";
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       <Background intensity={state.phase === "ELIMINATION" || state.phase === "REVEAL" ? 1.3 : 0.6} />
@@ -153,6 +161,15 @@ export default function GamePage() {
       {["VOTE", "REVEAL", "TIEBREAK", "ELIMINATION", "ROUND_TRANSITION", "FINALE_INTRO", "FINALE", "INTRO"].includes(
         state.phase
       ) && <StudioSetBackdrop />}
+
+      {/* Le plateau 3D vit ici, hors du routeur de phases : il est monté une
+          seule fois pour toute la partie et simplement masqué entre les
+          manches. Démonté/remonté à chaque phase, il créait un contexte
+          WebGL par manche — le navigateur en limite le nombre, et au bout de
+          quelques manches il tuait les plus anciens (« Context Lost »), ce
+          qui faisait disparaître le plateau en cours de partie. */}
+      <StageLayer state={state} visible={onStage} />
+
       <MuteButton />
       {state.isSpectator && state.phase !== "VICTORY" && <SpectatorBanner />}
       <AnimatePresence mode="wait">
@@ -160,6 +177,82 @@ export default function GamePage() {
           <PhaseRouter state={state} socket={socket} />
         </motion.div>
       </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * Couche du plateau, persistante. Elle occupe le haut de l'écran, derrière
+ * le contenu de la phase (qui est en z-10). Hors manche elle est masquée —
+ * sans être démontée, pour garder le même contexte WebGL d'un bout à
+ * l'autre de la partie.
+ */
+function StageLayer({ state, visible }: { state: any; visible: boolean }) {
+  // `hasWebGL` et la largeur d'écran touchent au DOM : on ne les évalue
+  // qu'après le montage client, sinon rendu serveur et client divergent.
+  const [webgl, setWebgl] = useState(false);
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    setWebgl(hasWebGL());
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setCompact(mq.matches);
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
+
+  const roster = state.players
+    .filter((p: any) => !p.eliminated)
+    .sort((a: any, b: any) => (a.seat ?? 0) - (b.seat ?? 0));
+
+  const result = state.lastAnswerResult;
+  const turnPlayer = state.players.find((p: any) => p.id === state.currentTurnPlayerId);
+  const mood: "idle" | "thinking" | "answering" | "happy" | "sad" = result
+    ? result.correct
+      ? "happy"
+      : "sad"
+    : turnPlayer?.answeredCurrent
+    ? "answering"
+    : state.question
+    ? "thinking"
+    : "idle";
+
+  const fallback = compact ? (
+    <PlateauMobile players={roster} activeId={state.currentTurnPlayerId} />
+  ) : (
+    <Plateau className="h-full" players={roster} activeId={state.currentTurnPlayerId} />
+  );
+
+  return (
+    <div
+      aria-hidden={!visible}
+      className="absolute inset-x-0 top-0 z-0"
+      style={{
+        height: compact ? STAGE_HEIGHT_MOBILE : STAGE_HEIGHT_DESKTOP,
+        opacity: visible ? 1 : 0,
+        pointerEvents: "none",
+        transition: "opacity 400ms ease",
+        visibility: visible ? "visible" : "hidden",
+      }}
+    >
+      {/* Une seule scène 3D. Avant, les variantes desktop et mobile étaient
+          toutes deux montées et l'une simplement masquée en CSS : deux
+          contextes WebGL et deux scènes complètes tournaient en parallèle,
+          pour une seule visible. On choisit donc en JS, pas en CSS. */}
+      {webgl ? (
+        <WebGLGuard fallback={fallback}>
+          <Plateau3D
+            compact={compact}
+            className="w-full h-full"
+            players={roster}
+            activeId={state.currentTurnPlayerId}
+            mood={mood}
+          />
+        </WebGLGuard>
+      ) : (
+        fallback
+      )}
     </div>
   );
 }
@@ -276,6 +369,20 @@ function Lobby({ state, socket }: { state: any; socket: any }) {
           ))}
         </AnimatePresence>
       </div>
+
+      {/* changement de personnage : possible tant qu'on n'est pas prêt, et
+          les personnages déjà sur le plateau sont marqués pris */}
+      {me && !me.ready && (
+        <Panel className="p-4 w-full max-w-md">
+          <p className="text-xs uppercase tracking-widest text-steel mb-3 text-center">Votre personnage</p>
+          <CharacterPicker
+            compact
+            value={me.character ?? 0}
+            taken={state.players.filter((p: any) => p.id !== me.id).map((p: any) => p.character)}
+            onChange={(index) => socket.emit("set_character", { index })}
+          />
+        </Panel>
+      )}
 
       <div className="flex flex-col items-center gap-4 mt-4 w-full max-w-sm">
         <BigButton
@@ -543,24 +650,6 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
   const correctIndex = state.question?.correctIndex;
   const revealed = correctIndex !== null && correctIndex !== undefined;
 
-  // Attitude du candidat sous le projecteur : il réfléchit pendant la
-  // question, réagit à la révélation.
-  const stageMood: "idle" | "thinking" | "answering" | "happy" | "sad" = result
-    ? result.correct
-      ? "happy"
-      : "sad"
-    : picked !== null
-    ? "answering"
-    : state.question
-    ? "thinking"
-    : "idle";
-
-  // `hasWebGL` touche au DOM : on ne l'évalue qu'après le montage client,
-  // sinon le rendu serveur et le rendu client divergent.
-  const [webgl, setWebgl] = useState(false);
-  useEffect(() => {
-    setWebgl(hasWebGL());
-  }, []);
 
   function answerTone(idx: number) {
     if (revealed) {
@@ -575,46 +664,12 @@ function RoundPlay({ state, socket }: { state: any; socket: any }) {
   return (
     <div className="relative min-h-screen flex flex-col">
       {/* ================= PLATEAU ================= */}
+      {/* Le plateau lui-même est monté une fois pour toute la partie (voir
+          StageLayer) ; ici on ne réserve que sa place, et on pose le HUD
+          par-dessus. */}
       <div className="relative">
-        {/* Desktop/tablette : le vrai plateau 3D — candidats en pied derrière
-            leurs bornes, plateau sombre, projecteur sur celui qui répond.
-            Si WebGL manque, on retombe sur le plateau CSS, même composition. */}
-        <div className="hidden md:block" style={{ height: "clamp(320px, 52vh, 640px)" }}>
-          {webgl ? (
-            <WebGLGuard
-              fallback={<Plateau className="h-full" players={roster} activeId={state.currentTurnPlayerId} />}
-            >
-              <Plateau3D
-                className="w-full h-full"
-                players={roster}
-                activeId={state.currentTurnPlayerId}
-                mood={stageMood}
-              />
-            </WebGLGuard>
-          ) : (
-            <Plateau className="h-full" players={roster} activeId={state.currentTurnPlayerId} />
-          )}
-        </div>
-        {/* Téléphone : même plateau 3D, mais cadré sur le candidat éclairé —
-            huit bornes alignées sur 375 px seraient illisibles. Sans WebGL,
-            on retombe sur la version CSS. */}
-        <div className="md:hidden" style={{ height: "clamp(230px, 34vh, 330px)" }}>
-          {webgl ? (
-            <WebGLGuard
-              fallback={<PlateauMobile players={roster} activeId={state.currentTurnPlayerId} />}
-            >
-              <Plateau3D
-                compact
-                className="w-full h-full"
-                players={roster}
-                activeId={state.currentTurnPlayerId}
-                mood={stageMood}
-              />
-            </WebGLGuard>
-          ) : (
-            <PlateauMobile players={roster} activeId={state.currentTurnPlayerId} />
-          )}
-        </div>
+        <div className="hidden md:block" style={{ height: STAGE_HEIGHT_DESKTOP }} />
+        <div className="md:hidden" style={{ height: STAGE_HEIGHT_MOBILE }} />
 
         {/* --- HUD : coin haut gauche --- */}
         <div className={`absolute left-2 md:left-5 z-20 ${state.isSpectator ? "top-10 md:top-12" : "top-2 md:top-5"}`}>

@@ -5,12 +5,14 @@ import { Background } from "@/components/Background";
 import { BigButton, Panel, MuteButton } from "@/components/UI";
 import { useSocket } from "@/hooks/useSocket";
 import { saveSession } from "@/lib/session";
+import { CharacterPicker, randomCharacter } from "@/components/CharacterPicker";
 
 export default function Join() {
   const router = useRouter();
   const { socket } = useSocket();
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [character, setCharacter] = useState(randomCharacter);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -19,7 +21,7 @@ export default function Join() {
     if (code.trim().length < 4) return setError("Code de partie invalide.");
     setLoading(true);
     setError("");
-    socket.emit("join_room", { code: code.trim().toUpperCase(), name: name.trim() }, (res: any) => {
+    socket.emit("join_room", { code: code.trim().toUpperCase(), name: name.trim(), character }, (res: any) => {
       setLoading(false);
       if (!res?.ok) {
         setError(res?.error || "Impossible de rejoindre cette partie.");
@@ -39,7 +41,7 @@ export default function Join() {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="relative z-10 w-full max-w-md"
+        className="relative z-10 w-full max-w-lg"
       >
         <h1 className="font-display text-4xl text-center mb-1 text-white uppercase">
           Rejoindre une <span className="text-blood">partie</span>
@@ -65,6 +67,14 @@ export default function Join() {
               placeholder="Q7K4P"
               className="w-full bg-black/40 border border-white/15 rounded-lg px-4 py-4 text-white text-center font-display text-3xl tracking-[0.3em] outline-none focus:border-blood transition"
             />
+          </div>
+
+          <div>
+            <label className="text-xs uppercase tracking-widest text-steel mb-2 block">Votre personnage</label>
+            <CharacterPicker value={character} onChange={setCharacter} />
+            <p className="text-[10px] text-steel/70 mt-2">
+              S'il est déjà pris dans la partie, un autre vous sera attribué — vous pourrez en changer dans le salon.
+            </p>
           </div>
 
           {error && <p className="text-blood text-sm text-center">{error}</p>}

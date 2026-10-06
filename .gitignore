@@ -1,8 +1,7 @@
 node_modules
 .next
 .env*.local
-test-sim.js
-test-roundtimer.js
+test-*.js
 /tmp
 *.log
 *.tsbuildinfo

@@ -34,8 +34,8 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("join_room", ({ code, name }, cb) => {
-      const result = engine.joinRoom(code, name, io);
+    socket.on("join_room", ({ code, name, character }, cb) => {
+      const result = engine.joinRoom(code, name, io, character);
       if (result.error) return cb?.({ ok: false, error: result.error });
       currentRoomCode = result.room.code;
       currentPlayerId = result.player.id;
@@ -62,6 +62,11 @@ app.prepare().then(() => {
       // même raison que pour join_room : la diffusion faite par l'engine
       // est partie avant que ce socket ne rejoigne sa room.
       socket.emit("state", engine.getStateFor(result.room, playerId));
+    });
+
+    socket.on("set_character", ({ index }) => {
+      const room = engine.findRoom(currentRoomCode);
+      if (room) engine.setCharacter(room, currentPlayerId, index, io);
     });
 
     socket.on("toggle_ready", () => {
